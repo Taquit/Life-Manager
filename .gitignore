@@ -1,0 +1,7 @@
+# Proyectos excluidos
+double_m/
+
+# Archivos de sistema y editores
+.idea/
+.DS_Store
+*.log
