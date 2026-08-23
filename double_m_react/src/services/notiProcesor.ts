@@ -10,8 +10,8 @@ export const notiProcesor = async (notificationData: NotificationData) => {
     try {
         const { title, text, app } = notificationData;
 
-        //extraccion monto
-        const amountStr = text.match(/\$\d+(?:\.\d+)?/);
+        // Extracción del monto (Soporta "$150", "$ 150", "$1,500.00", "$ 1,500,000.00")
+        const amountStr = text.match(/\$\s*[\d,]+(?:\.\d+)?/);
         const amount = amountStr ? parseFloat(amountStr[0].replace(/[^0-9.]/g, '')) : 0;
 
         // Extraemos los últimos 4 dígitos (soporta "**1234", "••6102", "termina en 1234")

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // 1. Crea la instancia de axios con la URL de tu backend
 const api = axios.create({
@@ -11,16 +12,26 @@ const api = axios.create({
 // 2. Interceptor de Peticiones (Se ejecuta ANTES de enviar CUALQUIER solicitud)
 api.interceptors.request.use(
   async (config) => {
+    let token = null;
     try {
-      // 2.1 Buscamos si el usuario ya tiene un token guardado (ENCRIPTADO)
-      const token = await SecureStore.getItemAsync('userToken');
-      
-      // 2.2 Si existe el token, se lo inyectamos a los Headers automáticamente
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
+      // 2.1 Intentamos obtener de SecureStore primero (pantalla desbloqueada)
+      token = await SecureStore.getItemAsync('userToken');
     } catch (error) {
-      console.error('Error leyendo el token:', error);
+      console.log('Error leyendo SecureStore (Posiblemente pantalla bloqueada).');
+    }
+    
+    // 2.2 Fallback: Si no hay token o falló SecureStore, intentamos desde AsyncStorage
+    if (!token) {
+      try {
+        token = await AsyncStorage.getItem('backgroundToken');
+      } catch (e) {
+        console.error('Error leyendo AsyncStorage:', e);
+      }
+    }
+    
+    // 2.3 Si encontramos un token, lo inyectamos
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
     
     return config;
