@@ -16,6 +16,7 @@ const headlessNotificationListener = async ({ notification }) => {
                 'com.google.android.apps.walletnfcrel',
                 'com.nu.production',
                 'com.bancomer.mbanking',
+                'com.whatsapp', // <-- AÑADIDO PARA PRUEBAS
                 // Agrega aquí los paquetes que sí quieres escuchar
             ];
 
@@ -47,14 +48,19 @@ const headlessNotificationListener = async ({ notification }) => {
             if (validNotification) {
 
                 // enviamos al endpoint de transacciones
-                const title = validNotification.title;
+                const title = validNotification.title || `Gasto automático (${notificationData.app || 'App'})`;
                 const amount = validNotification.amount;
                 const card_id = validNotification.cardId;
-                const category_id = 1;
+                const category_id = null; // En la BD es tipo UUID. Pasar un '1' crashearía PostgreSQL.
                 const date = new Date().toISOString();
                 const isAuto = true;
-                const response = await api.post("/transactions", { title, amount, category_id, isAuto, card_id, date });
-                console.log("Respuesta del backend:", response);
+                
+                try {
+                    const response = await api.post("/transactions", { title, amount, category_id, isAuto, card_id, date });
+                    console.log("Respuesta del backend:", response.data);
+                } catch (apiError) {
+                    console.error("Error al hacer POST a /transactions:", apiError?.response?.data || apiError.message);
+                }
             }
 
         } catch (error) {

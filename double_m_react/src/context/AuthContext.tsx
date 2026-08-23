@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // 1. Definimos qué información va a tener nuestro "altavoz"
 type AuthContextType = {
@@ -42,6 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (newToken: string) => {
     try {
       await SecureStore.setItemAsync('userToken', newToken);
+      await AsyncStorage.setItem('backgroundToken', newToken);
       setToken(newToken);
     } catch (error) {
       console.error("Error al guardar el token:", error);
@@ -52,6 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try {
       await SecureStore.deleteItemAsync('userToken');
+      await AsyncStorage.removeItem('backgroundToken');
       setToken(null);
     } catch (error) {
       console.error("Error al borrar el token:", error);
