@@ -51,7 +51,7 @@ const headlessNotificationListener = async ({ notification }) => {
                 const title = validNotification.title || `Gasto automático (${notificationData.app || 'App'})`;
                 const amount = validNotification.amount;
                 const card_id = validNotification.cardId;
-                const category_id = null; // En la BD es tipo UUID. Pasar un '1' crashearía PostgreSQL.
+                const category_id = validNotification.categoryId;
                 const date = new Date().toISOString();
                 const isAuto = true;
                 

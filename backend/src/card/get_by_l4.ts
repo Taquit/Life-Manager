@@ -18,8 +18,8 @@ export const handler = async (event: APIGatewayProxyEventV2) => {
     }
 
     const user_id = userPayload.user_id;
-    const body = event.body ? JSON.parse(event.body) : {};
-    const last4 = body.last4;
+    const queryStringParameters = event.queryStringParameters || {};
+    const last4 = queryStringParameters.l4 || queryStringParameters.last4;
 
     if (!user_id) {
         return {
@@ -71,7 +71,7 @@ export const handler = async (event: APIGatewayProxyEventV2) => {
             },
             body: JSON.stringify({
                 message: "Tarjeta obtenida correctamente",
-                card_id
+                id: card_id
             })
         }
     } catch (error: any) {

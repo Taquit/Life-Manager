@@ -1,13 +1,61 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
+import { useState, useCallback, useMemo } from "react";
+import api from '@/services/api';
+import { useTheme } from "@/hooks/use-theme";
 
 export default function HomePage() {
   const { logout } = useAuth();
   const router = useRouter();
+  const theme = useTheme();
+
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const loadTransactions = async () => {
+      try {
+          setLoading(true);
+          const res = await api.get('/transactions');
+          setTransactions(res.data.data || []);
+      } catch (error) {
+          console.error("Error cargando transacciones:", error);
+      } finally {
+          setLoading(false);
+      }
+  }
+
+  useFocusEffect(
+      useCallback(() => {
+          loadTransactions();
+      }, [])
+  );
+
+  const { totalMonth, monthName } = useMemo(() => {
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+
+      let sum = 0;
+      transactions.forEach(t => {
+          if (t.date) {
+              const tDate = new Date(t.date);
+              if (tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear) {
+                  sum += parseFloat(t.amount || 0);
+              }
+          }
+      });
+
+      const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+      return {
+          totalMonth: sum.toFixed(2),
+          monthName: monthNames[currentMonth]
+      };
+  }, [transactions]);
 
   return (
     <ThemedView style={styles.container}>
@@ -16,6 +64,17 @@ export default function HomePage() {
         <View style={styles.header}>
             <ThemedText type="title" style={styles.title}>Bienvenido</ThemedText>
             <ThemedText type="subtitle" style={styles.subtitle}>Aquí podrás ver que no se roban tu dinero, ¡lo gastaste tú!</ThemedText>
+        </View>
+
+        <View style={styles.contentContainer}>
+            <View style={[styles.summaryCard, { backgroundColor: theme.backgroundElement || '#f8f9fa' }]}>
+                <ThemedText style={styles.summaryTitle}>Gastos de {monthName}</ThemedText>
+                {loading ? (
+                    <ActivityIndicator size="small" color="#10B981" style={{ marginTop: 10 }} />
+                ) : (
+                    <ThemedText style={styles.summaryAmount}>${totalMonth}</ThemedText>
+                )}
+            </View>
         </View>
 
         <Pressable 
@@ -39,11 +98,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 40,
     paddingBottom: 20,
-    justifyContent: 'space-between', // Separa el contenido superior del botón de cerrar sesión
+    justifyContent: 'space-between',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 20,
   },
   title: {
     fontSize: 28,
@@ -56,28 +115,31 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     opacity: 0.8,
   },
-  menuContainer: {
+  contentContainer: {
     flex: 1,
-    width: '100%',
-    gap: 16, // Espacio entre los botones
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  menuButton: {
-    backgroundColor: '#007bff',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+  summaryCard: {
+    width: '100%',
+    padding: 30,
+    borderRadius: 20,
     alignItems: 'center',
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3, // Sombra para Android
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  menuButtonText: {
-    color: '#ffffff',
+  summaryTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    opacity: 0.8,
+    marginBottom: 10,
+  },
+  summaryAmount: {
+    fontSize: 42,
+    fontWeight: 'bold',
+    color: '#10B981',
   },
   logoutButton: {
     marginTop: 20,
