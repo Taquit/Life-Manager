@@ -1,7 +1,7 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useTheme } from "@/hooks/use-theme";
-import { cardsApi } from "@/services/api";
+import { cardsApi, getApiErrorMessage } from "@/services/api";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useCallback, useState } from "react";
@@ -35,7 +35,7 @@ export default function EditCardPage() {
                     if (item) setItemData(item);
                 } catch (error) {
                     console.error("Error obteniendo tarjeta:", error);
-                    Alert.alert("Error", "No se pudo cargar la informacion.");
+                    Alert.alert("Error", getApiErrorMessage(error));
                 } finally {
                     setIsLoading(false);
                 }
@@ -63,7 +63,7 @@ export default function EditCardPage() {
             ]);
         } catch (error) {
             console.error("Error editando tarjeta:", error);
-            Alert.alert("Error", "No se pudo guardar.");
+            Alert.alert("Error", getApiErrorMessage(error));
         } finally {
             setIsSaving(false);
         }

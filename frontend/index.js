@@ -1,59 +1,79 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import 'expo-router/entry';
 import { AppRegistry, Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { RNAndroidNotificationListenerHeadlessJsName } from 'react-native-android-notification-listener';
 import { notiProcesor } from './src/services/notiProcesor';
-import api from './src/services/api';
+
+// Configuracion para mostrar alertas locales en primer plano cuando la app esta abierta
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
 const headlessNotificationListener = async ({ notification }) => {
-    if (notification) {
-        try {
-            // Parse the notification payload which is passed as a JSON string
-            const notificationData = typeof notification === 'string' ? JSON.parse(notification) : notification;
-            console.log('Received notification in background:', notificationData);
+  if (notification) {
+    try {
+      // Parse the notification payload which is passed as a JSON string
+      const notificationData =
+        typeof notification === 'string' ? JSON.parse(notification) : notification;
+      console.log('Received notification in background:', notificationData);
 
-            // Lista de paquetes permitidos (exclusivo para Google Pay)
-            const ALLOWED_PACKAGES = [
-                'com.google.android.apps.walletnfcrel',
-                'com.google.android.apps.nfc.payment',
-            ];
+      if (!notificationData.time) {
+        notificationData.time = Date.now();
+      }
 
-            const appName = (notificationData.app || '').toLowerCase();
-            const isGooglePay = ALLOWED_PACKAGES.includes(notificationData.app) ||
-                appName.includes('wallet') ||
-                appName.includes('google pay');
+      // Lista de paquetes permitidos (exclusivo para Google Pay / Wallet)
+      const ALLOWED_PACKAGES = [
+        'com.google.android.apps.walletnfcrel',
+        'com.google.android.apps.nfc.payment',
+      ];
 
-            // Si la app de la notificacion no es de Google Pay, la ignoramos
-            if (!isGooglePay) {
-                return;
-            }
+      const appName = (notificationData.app || '').toLowerCase();
+      const isGooglePay =
+        ALLOWED_PACKAGES.includes(notificationData.app) ||
+        appName.includes('wallet') ||
+        appName.includes('google pay') ||
+        appName.includes('gpay');
 
-            // Guardamos la notificacion en el almacenamiento local para poder leerla desde la pantalla de debug
-            const existingStr = await AsyncStorage.getItem('@debug_notifications');
-            let existing = [];
-            if (existingStr) {
-                existing = JSON.parse(existingStr);
-            }
+      // Si la app de la notificacion no es de Google Pay, la ignoramos
+      if (!isGooglePay) {
+        return;
+      }
 
-            // Anadimos la nueva y guardamos (maximo 50 para no llenar la memoria)
-            existing.unshift(notificationData);
-            if (existing.length > 50) existing.length = 50;
+      // Guardamos la notificacion en el almacenamiento local para poder leerla desde la pantalla de debug
+      const existingStr = await AsyncStorage.getItem('@debug_notifications');
+      let existing = [];
+      if (existingStr) {
+        existing = JSON.parse(existingStr);
+      }
 
-            await AsyncStorage.setItem('@debug_notifications', JSON.stringify(existing));
+      // Anadimos la nueva y guardamos (maximo 50 para no llenar la memoria)
+      existing.unshift(notificationData);
+      if (existing.length > 50) existing.length = 50;
 
-            // Procesar y registrar transaccion automatica en el backend
-            const createdTx = await notiProcesor(notificationData);
-            if (createdTx) {
-                console.log('Transaccion automatica Google Pay registrada con exito:', createdTx);
-            }
+      await AsyncStorage.setItem('@debug_notifications', JSON.stringify(existing));
 
-        } catch (error) {
-            console.error('Error processing notification:', error);
-        }
+      // Procesar y registrar transaccion automatica en el backend (dispara notificacion local si es exitosa)
+      const createdTx = await notiProcesor(notificationData);
+      if (createdTx) {
+        console.log('Transaccion automatica Google Pay registrada con exito:', createdTx);
+      }
+    } catch (error) {
+      console.error('Error processing notification:', error);
     }
+  }
 };
 
 // Se registra la tarea en segundo plano (Headless JS) para escuchar notificaciones solo en Android
 if (Platform.OS === 'android' && typeof AppRegistry.registerHeadlessTask === 'function') {
-  AppRegistry.registerHeadlessTask(RNAndroidNotificationListenerHeadlessJsName, () => headlessNotificationListener);
+  AppRegistry.registerHeadlessTask(
+    RNAndroidNotificationListenerHeadlessJsName,
+    () => headlessNotificationListener
+  );
 }
-

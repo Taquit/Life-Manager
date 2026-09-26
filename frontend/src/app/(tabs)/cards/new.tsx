@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { ThemeTokens, Radii } from '@/constants/theme';
-import { cardsApi } from '@/services/api';
+import { cardsApi, getApiErrorMessage } from '@/services/api';
 
 const COLOR_OPTIONS = [
   '#7C3AED', // Brand Purple
@@ -60,7 +60,7 @@ export default function NewCardScreen() {
       router.back();
     } catch (err) {
       console.error('Error creando tarjeta:', err);
-      Alert.alert('Error', 'No se pudo guardar la tarjeta.');
+      Alert.alert('Error', getApiErrorMessage(err));
     } finally {
       setSaving(false);
     }

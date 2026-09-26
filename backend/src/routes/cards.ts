@@ -34,7 +34,7 @@ cardRoutes.get("/by_l4", async (c) => {
   try {
     const { cardTable } = await getTables();
     const result = await query(
-      `SELECT * FROM ${cardTable} WHERE last_4 = $1 AND user_id = $2;`,
+      `SELECT * FROM ${cardTable} WHERE (last_4 = $1 OR last4 = $1) AND user_id = $2;`,
       [last4, userId]
     );
 
@@ -49,7 +49,7 @@ cardRoutes.get("/by_l4", async (c) => {
       data: card,
     });
   } catch (err: any) {
-    return c.json({ error: "Error interno del servidor", details: err.message }, 500);
+    return c.json({ error: "Error interno del servidor", details: err.detail || err.message }, 500);
   }
 });
 
@@ -70,7 +70,7 @@ cardRoutes.get("/", async (c) => {
       data: cards,
     });
   } catch (err: any) {
-    return c.json({ error: "Error obteniendo tarjetas", details: err.message }, 500);
+    return c.json({ error: "Error obteniendo tarjetas", details: err.detail || err.message }, 500);
   }
 });
 
@@ -95,8 +95,8 @@ cardRoutes.post("/", async (c) => {
   try {
     const { cardTable } = await getTables();
     const insertQuery = `
-      INSERT INTO ${cardTable} (user_id, alias, banco, type, last_4, color, linked_google, cut_day, pay_day)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO ${cardTable} (user_id, alias, banco, bankname, type, last_4, last4, color, linked_google, cut_day, pay_day)
+      VALUES ($1, $2, $3, $3, $4, $5, $5, $6, $7, $8, $9)
       RETURNING *;
     `;
     const values = [userId, alias, banco, type, last4, color, linkedGoogle, cutDay, payDay];
@@ -111,7 +111,7 @@ cardRoutes.post("/", async (c) => {
       201
     );
   } catch (err: any) {
-    return c.json({ error: "Error creando tarjeta", details: err.message }, 500);
+    return c.json({ error: "Error creando tarjeta", details: err.detail || err.message }, 500);
   }
 });
 
@@ -140,8 +140,10 @@ const updateCardHandler = async (c: any) => {
       SET
         alias = CASE WHEN $1::boolean THEN $2 ELSE alias END,
         banco = COALESCE($3, banco),
+        bankname = COALESCE($3, bankname),
         type = COALESCE($4, type),
         last_4 = COALESCE($5, last_4),
+        last4 = COALESCE($5, last4),
         color = COALESCE($6, color),
         linked_google = COALESCE($7, linked_google),
         cut_day = COALESCE($8, cut_day),
@@ -173,7 +175,7 @@ const updateCardHandler = async (c: any) => {
       data: mapCardRow(result.rows[0]),
     });
   } catch (err: any) {
-    return c.json({ error: "Error actualizando tarjeta", details: err.message }, 500);
+    return c.json({ error: "Error actualizando tarjeta", details: err.detail || err.message }, 500);
   }
 };
 
@@ -206,7 +208,7 @@ const deleteCardHandler = async (c: any) => {
       message: "Tarjeta eliminada correctamente",
     });
   } catch (err: any) {
-    return c.json({ error: "Error eliminando tarjeta", details: err.message }, 500);
+    return c.json({ error: "Error eliminando tarjeta", details: err.detail || err.message }, 500);
   }
 };
 

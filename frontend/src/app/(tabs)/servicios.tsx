@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { ThemeTokens } from '@/constants/theme';
-import { servicesApi, categoriesApi } from '@/services/api';
+import { servicesApi, categoriesApi, getApiErrorMessage } from '@/services/api';
 import { Service, Category } from '@/types';
 import { CategoryIcon } from '@/components/CategoryIcon';
 
@@ -87,7 +87,7 @@ export default function ServiciosScreen() {
       setServices((prev) =>
         prev.map((s) => (s.id === srv.id ? { ...s, state: srv.state } : s))
       );
-      Alert.alert('Error', 'No se pudo actualizar el estado del servicio.');
+      Alert.alert('Error', getApiErrorMessage(err));
     }
   };
 
@@ -161,7 +161,7 @@ export default function ServiciosScreen() {
       loadServices();
     } catch (err: any) {
       console.error('Error guardando servicio:', err);
-      Alert.alert('Error', 'No se pudo guardar el servicio. Intenta nuevamente.');
+      Alert.alert('Error', getApiErrorMessage(err));
     } finally {
       setSavingForm(false);
     }
@@ -183,7 +183,7 @@ export default function ServiciosScreen() {
               loadServices();
             } catch (err: any) {
               console.error('Error eliminando servicio:', err);
-              Alert.alert('Error', 'No se pudo eliminar el servicio.');
+              Alert.alert('Error', getApiErrorMessage(err));
             }
           },
         },

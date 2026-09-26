@@ -1,7 +1,7 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useTheme } from "@/hooks/use-theme";
-import { transactionsApi, categoriesApi, cardsApi } from "@/services/api";
+import { transactionsApi, categoriesApi, cardsApi, getApiErrorMessage } from "@/services/api";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState, useEffect } from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, TextInput, View, Switch, Platform, ScrollView } from "react-native";
@@ -61,7 +61,7 @@ export default function EditTransaccionPage() {
                     }
                 } catch (error) {
                     console.error("Error obteniendo:", error);
-                    Alert.alert("Error", "No se pudo cargar la informacion.");
+                    Alert.alert("Error", getApiErrorMessage(error));
                 } finally {
                     setIsLoading(false);
                 }
@@ -89,7 +89,7 @@ export default function EditTransaccionPage() {
             ]);
         } catch (error) {
             console.error("Error editando:", error);
-            Alert.alert("Error", "No se pudo guardar.");
+            Alert.alert("Error", getApiErrorMessage(error));
         } finally {
             setIsSaving(false);
         }

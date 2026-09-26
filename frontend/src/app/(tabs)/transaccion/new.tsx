@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { transactionsApi, categoriesApi, cardsApi } from '@/services/api';
+import { transactionsApi, categoriesApi, cardsApi, getApiErrorMessage } from '@/services/api';
 import { Category, Card } from '@/types';
 import { CategoryIcon } from '@/components/CategoryIcon';
 
@@ -85,7 +85,7 @@ export default function NuevaTransaccionScreen() {
       router.back();
     } catch (err: any) {
       console.error('Error guardando transacción:', err);
-      Alert.alert('Error', 'No se pudo guardar la transacción.');
+      Alert.alert('Error', getApiErrorMessage(err));
     } finally {
       setSaving(false);
     }

@@ -16,8 +16,17 @@ import {
 
 export const api = axios.create({
   baseURL: process.env.EXPO_PUBLIC_API_URL || 'https://api.moneyapp.com',
-  timeout: 10000,
+  timeout: 25000,
 });
+
+export const getApiErrorMessage = (error: any): string => {
+  return (
+    error?.response?.data?.details ||
+    error?.response?.data?.error ||
+    error?.message ||
+    'Error de conexion'
+  );
+};
 
 api.interceptors.request.use(
   async (config) => {

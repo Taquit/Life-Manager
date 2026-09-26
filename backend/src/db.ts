@@ -1,4 +1,4 @@
-import { Client, QueryResult, QueryResultRow } from "pg";
+import { Pool, PoolClient, QueryResult, QueryResultRow } from "pg";
 import { Resource } from "sst";
 
 export function getConnectionString(): string {
@@ -9,43 +9,66 @@ export function getConnectionString(): string {
   );
 }
 
-export function createClient(): Client {
-  return new Client({
-    connectionString: getConnectionString(),
-    ssl: {
-      rejectUnauthorized: false,
-    },
-    connectionTimeoutMillis: 5000,
-  });
+let pool: Pool | null = null;
+
+export function getPool(): Pool {
+  if (!pool) {
+    pool = new Pool({
+      connectionString: getConnectionString(),
+      ssl: {
+        rejectUnauthorized: false,
+      },
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 15000,
+    });
+
+    pool.on("error", (err) => {
+      console.error("Error inesperado en cliente inactivo del pg.Pool:", err);
+    });
+  }
+  return pool;
 }
 
-/**
- * Executes a callback with a dedicated PostgreSQL Client,
- * ensuring the connection is cleanly closed in a finally block.
- */
 export async function withClient<T>(
-  callback: (client: Client) => Promise<T>
+  callback: (client: PoolClient) => Promise<T>
 ): Promise<T> {
-  const client = createClient();
-  await client.connect();
+  const p = getPool();
+  const client = await p.connect();
   try {
     return await callback(client);
   } finally {
-    await client.end().catch((err) => {
-      console.error("Error cerrando conexion de PostgreSQL Client:", err);
-    });
+    client.release();
   }
 }
 
-/**
- * Executes a query using a dedicated PostgreSQL Client,
- * immediately closing the session upon query completion.
- */
 export async function query<R extends QueryResultRow = any>(
   text: string,
-  params?: any[]
+  params?: any[],
+  retries = 2
 ): Promise<QueryResult<R>> {
-  return withClient((client) => client.query<R>(text, params));
+  const p = getPool();
+  try {
+    return await p.query<R>(text, params);
+  } catch (err: any) {
+    const isTransient =
+      err?.code === "ECONNRESET" ||
+      err?.code === "57P01" ||
+      err?.code === "57P02" ||
+      err?.code === "57P03" ||
+      err?.code === "08006" ||
+      err?.code === "08001" ||
+      err?.code === "08004" ||
+      err?.message?.includes("Connection terminated") ||
+      err?.message?.includes("timeout");
+
+    if (retries > 0 && isTransient) {
+      console.warn(`Error transitorio de conexion en query (${err.message}), reintentando...`);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return query<R>(text, params, retries - 1);
+    }
+    throw err;
+  }
 }
 
 let resolvedTables: Record<string, string> | null = null;
@@ -68,101 +91,183 @@ export async function ensureUserTable(): Promise<void> {
   userTableEnsured = true;
 }
 
-/**
- * Ensures schema constraints and columns are aligned:
- * 1. Ensures the 'alias' column exists on the Card table.
- * 2. Ensures foreign key constraints on 'user_id' in Category, Card, Service,
- *    and Transaction reference public.users(id) instead of auth.users(id).
- */
 export async function ensureSchemaConstraints(tables: Record<string, string>): Promise<void> {
   if (schemaConstraintsEnsured) return;
   if (!schemaConstraintsPromise) {
     schemaConstraintsPromise = (async () => {
-      // 1. Asegurar columna alias en Card
-      const cardTable = tables.Card || 'public."Card"';
       try {
-        await query(`ALTER TABLE ${cardTable} ADD COLUMN IF NOT EXISTS alias text;`);
-      } catch (err: any) {
-        console.warn(`Advertencia al asegurar columna alias en ${cardTable}:`, err.message);
-      }
+        const colRes = await query<{
+          table_name: string;
+          column_name: string;
+          data_type: string;
+        }>(`
+          SELECT table_name, column_name, data_type
+          FROM information_schema.columns
+          WHERE table_schema = 'public';
+        `);
 
-      // 2. Ajustar restricciones de clave foranea user_id para Category, Card, Service, Transaction
-      const targetTables = [
-        { key: "Category", constraintName: "Category_user_id_fkey" },
-        { key: "Card", constraintName: "Card_user_id_fkey" },
-        { key: "Service", constraintName: "Service_user_id_fkey" },
-        { key: "Transaction", constraintName: "Transaction_user_id_fkey" },
-      ];
-
-      for (const target of targetTables) {
-        const tableName = tables[target.key];
-        if (!tableName) continue;
-
-        try {
-          // Extraer nombre simple de tabla para consultar pg_class
-          const rawTableName = tableName.replace(/^public\./, "").replace(/^"|"$/g, "");
-
-          // Buscar cualquier FK en la columna user_id para esta tabla
-          const fkCheckQuery = `
-            SELECT
-              con.conname AS constraint_name,
-              fnsp.nspname AS foreign_schema,
-              frel.relname AS foreign_table
-            FROM pg_constraint con
-            JOIN pg_class rel ON rel.oid = con.conrelid
-            JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
-            JOIN pg_class frel ON frel.oid = con.confrelid
-            JOIN pg_namespace fnsp ON fnsp.oid = frel.relnamespace
-            JOIN pg_attribute att ON att.attrelid = rel.oid AND att.attnum = con.conkey[1]
-            WHERE nsp.nspname = 'public'
-              AND con.contype = 'f'
-              AND att.attname = 'user_id'
-              AND LOWER(rel.relname) = LOWER($1);
-          `;
-
-          const fkResult = await query(fkCheckQuery, [rawTableName]);
-
-          let needsRecreation = false;
-          let constraintToDrop: string | null = null;
-
-          if (fkResult.rows.length > 0) {
-            const existingFk = fkResult.rows[0];
-            if (existingFk.foreign_schema !== "public" || existingFk.foreign_table !== "users") {
-              needsRecreation = true;
-              constraintToDrop = existingFk.constraint_name;
-            }
-          } else {
-            // No existe FK en user_id, se crea
-            needsRecreation = true;
+        const existingCols = new Map<string, Map<string, string>>();
+        for (const row of colRes.rows) {
+          const t = row.table_name.toLowerCase();
+          if (!existingCols.has(t)) {
+            existingCols.set(t, new Map());
           }
-
-          if (needsRecreation) {
-            if (constraintToDrop) {
-              await query(`ALTER TABLE ${tableName} DROP CONSTRAINT IF EXISTS "${constraintToDrop}";`);
-            }
-            // Tambien dropear por el nombre estandar por precaucion
-            await query(`ALTER TABLE ${tableName} DROP CONSTRAINT IF EXISTS "${target.constraintName}";`);
-
-            // Limpiar registros huerfanos previos si existieran antes de aplicar la restriccion
-            await query(`
-              DELETE FROM ${tableName}
-              WHERE user_id IS NOT NULL
-                AND user_id NOT IN (SELECT id FROM public.users);
-            `).catch(() => {});
-
-            // Crear la restriccion apuntando a public.users(id)
-            await query(`
-              ALTER TABLE ${tableName}
-              ADD CONSTRAINT "${target.constraintName}"
-              FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-            `);
-          }
-        } catch (err: any) {
-          console.warn(`Advertencia al alinear clave foranea para ${target.key}:`, err.message);
+          existingCols.get(t)!.set(row.column_name.toLowerCase(), row.data_type.toLowerCase());
         }
-      }
 
-      schemaConstraintsEnsured = true;
+        const getTableRawName = (quotedName: string) =>
+          quotedName.replace(/^public\./, "").replace(/^"|"$/g, "").toLowerCase();
+
+        const cardRaw = getTableRawName(tables.Card || "Card");
+        const catRaw = getTableRawName(tables.Category || "Category");
+        const txRaw = getTableRawName(tables.Transaction || "Transaction");
+        const srvRaw = getTableRawName(tables.Service || "Service");
+
+        const catIdType = existingCols.get(catRaw)?.get("id") || "bigint";
+        const cardIdType = existingCols.get(cardRaw)?.get("id") || "bigint";
+
+        const catFkType = catIdType.includes("uuid") ? "uuid" : "bigint";
+        const cardFkType = cardIdType.includes("uuid") ? "uuid" : "bigint";
+
+        const ddlStatements: string[] = [];
+
+        if (tables.Card) {
+          ddlStatements.push(
+            `ALTER TABLE ${tables.Card} ADD COLUMN IF NOT EXISTS alias text;`,
+            `ALTER TABLE ${tables.Card} ADD COLUMN IF NOT EXISTS banco text;`,
+            `ALTER TABLE ${tables.Card} ADD COLUMN IF NOT EXISTS bankname text;`,
+            `ALTER TABLE ${tables.Card} ADD COLUMN IF NOT EXISTS type text DEFAULT 'debito';`,
+            `ALTER TABLE ${tables.Card} ADD COLUMN IF NOT EXISTS last_4 text;`,
+            `ALTER TABLE ${tables.Card} ADD COLUMN IF NOT EXISTS last4 text;`,
+            `ALTER TABLE ${tables.Card} ADD COLUMN IF NOT EXISTS color text DEFAULT '#7C3AED';`,
+            `ALTER TABLE ${tables.Card} ADD COLUMN IF NOT EXISTS linked_google boolean DEFAULT false;`,
+            `ALTER TABLE ${tables.Card} ADD COLUMN IF NOT EXISTS cut_day integer;`,
+            `ALTER TABLE ${tables.Card} ADD COLUMN IF NOT EXISTS pay_day integer;`
+          );
+        }
+
+        if (tables.Category) {
+          ddlStatements.push(
+            `ALTER TABLE ${tables.Category} ADD COLUMN IF NOT EXISTS type text DEFAULT 'gasto';`,
+            `ALTER TABLE ${tables.Category} ADD COLUMN IF NOT EXISTS color text DEFAULT '#B84FFF';`,
+            `ALTER TABLE ${tables.Category} ADD COLUMN IF NOT EXISTS icon text DEFAULT 'tag';`
+          );
+        }
+
+        if (tables.Transaction) {
+          const txCols = existingCols.get(txRaw);
+          if (!txCols?.has("category_id")) {
+            ddlStatements.push(`ALTER TABLE ${tables.Transaction} ADD COLUMN IF NOT EXISTS category_id ${catFkType};`);
+          }
+          if (!txCols?.has("card_id")) {
+            ddlStatements.push(`ALTER TABLE ${tables.Transaction} ADD COLUMN IF NOT EXISTS card_id ${cardFkType};`);
+          }
+          ddlStatements.push(
+            `ALTER TABLE ${tables.Transaction} ADD COLUMN IF NOT EXISTS type text DEFAULT 'gasto';`,
+            `ALTER TABLE ${tables.Transaction} ADD COLUMN IF NOT EXISTS amount numeric DEFAULT 0;`,
+            `ALTER TABLE ${tables.Transaction} ADD COLUMN IF NOT EXISTS date timestamp with time zone DEFAULT now();`,
+            `ALTER TABLE ${tables.Transaction} ADD COLUMN IF NOT EXISTS note text;`,
+            `ALTER TABLE ${tables.Transaction} ADD COLUMN IF NOT EXISTS title text;`,
+            `ALTER TABLE ${tables.Transaction} ADD COLUMN IF NOT EXISTS origin text DEFAULT 'manual';`,
+            `ALTER TABLE ${tables.Transaction} ADD COLUMN IF NOT EXISTS is_auto boolean DEFAULT false;`
+          );
+        }
+
+        if (tables.Service) {
+          const srvCols = existingCols.get(srvRaw);
+          if (!srvCols?.has("category_id")) {
+            ddlStatements.push(`ALTER TABLE ${tables.Service} ADD COLUMN IF NOT EXISTS category_id ${catFkType};`);
+          }
+          ddlStatements.push(
+            `ALTER TABLE ${tables.Service} ADD COLUMN IF NOT EXISTS name text;`,
+            `ALTER TABLE ${tables.Service} ADD COLUMN IF NOT EXISTS amount numeric DEFAULT 0;`,
+            `ALTER TABLE ${tables.Service} ADD COLUMN IF NOT EXISTS due_date date;`,
+            `ALTER TABLE ${tables.Service} ADD COLUMN IF NOT EXISTS state text DEFAULT 'pendiente';`,
+            `ALTER TABLE ${tables.Service} ADD COLUMN IF NOT EXISTS pay_day integer;`
+          );
+        }
+
+        for (const sql of ddlStatements) {
+          try {
+            await query(sql);
+          } catch (err: any) {
+            console.warn(`Advertencia al ejecutar schema DDL: ${sql} - ${err.message}`);
+          }
+        }
+
+        const targetTables = [
+          { key: "Category", constraintName: "Category_user_id_fkey" },
+          { key: "Card", constraintName: "Card_user_id_fkey" },
+          { key: "Service", constraintName: "Service_user_id_fkey" },
+          { key: "Transaction", constraintName: "Transaction_user_id_fkey" },
+        ];
+
+        for (const target of targetTables) {
+          const tableName = tables[target.key];
+          if (!tableName) continue;
+
+          try {
+            const rawTableName = tableName.replace(/^public\./, "").replace(/^"|"$/g, "");
+
+            const fkCheckQuery = `
+              SELECT
+                con.conname AS constraint_name,
+                fnsp.nspname AS foreign_schema,
+                frel.relname AS foreign_table
+              FROM pg_constraint con
+              JOIN pg_class rel ON rel.oid = con.conrelid
+              JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+              JOIN pg_class frel ON frel.oid = con.confrelid
+              JOIN pg_namespace fnsp ON fnsp.oid = frel.relnamespace
+              JOIN pg_attribute att ON att.attrelid = rel.oid AND att.attnum = con.conkey[1]
+              WHERE nsp.nspname = 'public'
+                AND con.contype = 'f'
+                AND att.attname = 'user_id'
+                AND LOWER(rel.relname) = LOWER($1);
+            `;
+
+            const fkResult = await query(fkCheckQuery, [rawTableName]);
+
+            let needsRecreation = false;
+            let constraintToDrop: string | null = null;
+
+            if (fkResult.rows.length > 0) {
+              const existingFk = fkResult.rows[0];
+              if (existingFk.foreign_schema !== "public" || existingFk.foreign_table !== "users") {
+                needsRecreation = true;
+                constraintToDrop = existingFk.constraint_name;
+              }
+            } else {
+              needsRecreation = true;
+            }
+
+            if (needsRecreation) {
+              if (constraintToDrop) {
+                await query(`ALTER TABLE ${tableName} DROP CONSTRAINT IF EXISTS "${constraintToDrop}";`);
+              }
+              await query(`ALTER TABLE ${tableName} DROP CONSTRAINT IF EXISTS "${target.constraintName}";`);
+
+              await query(`
+                DELETE FROM ${tableName}
+                WHERE user_id IS NOT NULL
+                  AND user_id NOT IN (SELECT id FROM public.users);
+              `).catch(() => {});
+
+              await query(`
+                ALTER TABLE ${tableName}
+                ADD CONSTRAINT "${target.constraintName}"
+                FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+              `);
+            }
+          } catch (err: any) {
+            console.warn(`Advertencia al alinear clave foranea para ${target.key}:`, err.message);
+          }
+        }
+
+        schemaConstraintsEnsured = true;
+      } catch (err: any) {
+        console.error("Error al asegurar restricciones de esquema:", err.message);
+      }
     })().finally(() => {
       schemaConstraintsPromise = null;
     });
@@ -171,42 +276,43 @@ export async function ensureSchemaConstraints(tables: Record<string, string>): P
 }
 
 async function resolveAllTables(): Promise<Record<string, string>> {
-  if (resolvedTables) {
-    if (!schemaConstraintsEnsured) {
-      await ensureSchemaConstraints(resolvedTables);
-    }
+  if (resolvedTables && schemaConstraintsEnsured) {
     return resolvedTables;
   }
   if (!resolveTablesPromise) {
     resolveTablesPromise = (async () => {
       await ensureUserTable();
-      const res = await query<{ table_name: string }>(
-        `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';`
-      );
-      const existing = res.rows.map((r) => r.table_name);
 
-      const findMatch = (candidates: string[], defaultFallback: string): string => {
-        for (const cand of candidates) {
-          const found = existing.find((t) => t.toLowerCase() === cand.toLowerCase());
-          if (found) {
-            return /^[a-z_][a-z0-9_]*$/.test(found) ? `public.${found}` : `public."${found}"`;
+      if (!resolvedTables) {
+        const res = await query<{ table_name: string }>(
+          `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';`
+        );
+        const existing = res.rows.map((r) => r.table_name);
+
+        const findMatch = (candidates: string[], defaultFallback: string): string => {
+          for (const cand of candidates) {
+            const found = existing.find((t) => t.toLowerCase() === cand.toLowerCase());
+            if (found) {
+              return /^[a-z_][a-z0-9_]*$/.test(found) ? `public.${found}` : `public."${found}"`;
+            }
           }
-        }
-        return defaultFallback;
-      };
+          return defaultFallback;
+        };
 
-      const resolved = {
-        Category: findMatch(["Category", "category", "categories"], 'public."Category"'),
-        Card: findMatch(["Card", "card", "cards"], 'public."Card"'),
-        Service: findMatch(["Service", "service", "services", "servicio_a_pagar"], 'public."Service"'),
-        Transaction: findMatch(["Transaction", "transaction", "transactions"], 'public."Transaction"'),
-        User: findMatch(["users", "User", "user", "usuario"], "public.users"),
-      };
-      resolvedTables = resolved;
+        resolvedTables = {
+          Category: findMatch(["Category", "category", "categories"], 'public."Category"'),
+          Card: findMatch(["Card", "card", "cards"], 'public."Card"'),
+          Service: findMatch(["Service", "service", "services", "servicio_a_pagar"], 'public."Service"'),
+          Transaction: findMatch(["Transaction", "transaction", "transactions"], 'public."Transaction"'),
+          User: findMatch(["users", "User", "user", "usuario"], "public.users"),
+        };
+      }
 
-      await ensureSchemaConstraints(resolved);
+      if (!schemaConstraintsEnsured) {
+        await ensureSchemaConstraints(resolvedTables);
+      }
 
-      return resolved;
+      return resolvedTables;
     })().finally(() => {
       resolveTablesPromise = null;
     });
@@ -237,15 +343,5 @@ export async function getTables() {
     serviceTable: tables.Service,
     transactionTable: tables.Transaction,
     userTable: tables.User,
-  };
-}
-
-/**
- * Backwards compatibility shim for any consumer expecting getPool().
- */
-export function getPool() {
-  return {
-    query,
-    end: async () => {},
   };
 }

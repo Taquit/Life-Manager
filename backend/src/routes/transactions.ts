@@ -24,20 +24,20 @@ function mapTransactionRow(row: any): TransactionDTO {
     type: row.type || "gasto",
     amount: Number(row.amount),
     date: row.date ? new Date(row.date).toISOString() : new Date().toISOString(),
-    note: row.note ?? null,
-    origin: row.origin || "manual",
+    note: row.note || row.title || null,
+    origin: row.origin || (row.is_auto ? "automático_google_pay" : "manual"),
     categoryName: row.category_name ?? null,
     categoryColor: row.category_color ?? null,
     categoryIcon: row.category_icon ?? null,
-    cardBanco: row.card_banco ?? null,
-    cardLast4: row.card_last_4 ?? null,
+    cardBanco: row.card_banco || row.card_bankname || null,
+    cardLast4: row.card_last_4 || row.card_last4 || null,
   };
 }
 
 // GET /transactions/summary (Resumen mensual)
 transactionRoutes.get("/summary", async (c) => {
   const userId = c.get("userId");
-  const monthParam = c.req.query("month") || new Date().toISOString().substring(0, 7); // "YYYY-MM"
+  const monthParam = c.req.query("month") || new Date().toISOString().substring(0, 7);
 
   try {
     const { transactionTable, categoryTable } = await getTables();
@@ -112,7 +112,7 @@ transactionRoutes.get("/summary", async (c) => {
       data: summary,
     });
   } catch (err: any) {
-    return c.json({ error: "Error generando resumen mensual", details: err.message }, 500);
+    return c.json({ error: "Error generando resumen mensual", details: err.detail || err.message }, 500);
   }
 });
 
@@ -139,7 +139,9 @@ transactionRoutes.get("/", async (c) => {
           c.color AS category_color,
           c.icon AS category_icon,
           cd.banco AS card_banco,
-          cd.last_4 AS card_last_4
+          cd.bankname AS card_bankname,
+          cd.last_4 AS card_last_4,
+          cd.last4 AS card_last4
         FROM ${transactionTable} t
         LEFT JOIN ${categoryTable} c ON t.category_id = c.id
         LEFT JOIN ${cardTable} cd ON t.card_id = cd.id
@@ -192,7 +194,9 @@ transactionRoutes.get("/", async (c) => {
         c.color AS category_color,
         c.icon AS category_icon,
         cd.banco AS card_banco,
-        cd.last_4 AS card_last_4
+        cd.bankname AS card_bankname,
+        cd.last_4 AS card_last_4,
+        cd.last4 AS card_last4
       FROM ${transactionTable} t
       LEFT JOIN ${categoryTable} c ON t.category_id = c.id
       LEFT JOIN ${cardTable} cd ON t.card_id = cd.id
@@ -209,7 +213,7 @@ transactionRoutes.get("/", async (c) => {
       data,
     });
   } catch (err: any) {
-    return c.json({ error: "Error obteniendo transacciones", details: err.message }, 500);
+    return c.json({ error: "Error obteniendo transacciones", details: err.detail || err.message }, 500);
   }
 });
 
@@ -227,7 +231,9 @@ transactionRoutes.get("/:id", async (c) => {
         c.color AS category_color,
         c.icon AS category_icon,
         cd.banco AS card_banco,
-        cd.last_4 AS card_last_4
+        cd.bankname AS card_bankname,
+        cd.last_4 AS card_last_4,
+        cd.last4 AS card_last4
       FROM ${transactionTable} t
       LEFT JOIN ${categoryTable} c ON t.category_id = c.id
       LEFT JOIN ${cardTable} cd ON t.card_id = cd.id
@@ -242,7 +248,7 @@ transactionRoutes.get("/:id", async (c) => {
       data: mapTransactionRow(res.rows[0]),
     });
   } catch (err: any) {
-    return c.json({ error: "Error obteniendo transaccion", details: err.message }, 500);
+    return c.json({ error: "Error obteniendo transaccion", details: err.detail || err.message }, 500);
   }
 });
 
@@ -274,10 +280,9 @@ transactionRoutes.post("/google-pay", async (c) => {
   try {
     const { cardTable, categoryTable, transactionTable } = await getTables();
 
-    // 1. Buscar o crear tarjeta para el usuario con last_4 = cardLast4
     const cardQuery = `
       SELECT * FROM ${cardTable}
-      WHERE user_id = $1 AND last_4 = $2
+      WHERE user_id = $1 AND (last_4 = $2 OR last4 = $2)
       ORDER BY id ASC
       LIMIT 1;
     `;
@@ -286,8 +291,8 @@ transactionRoutes.post("/google-pay", async (c) => {
     let cardRow = cardRes.rows[0];
     if (!cardRow) {
       const insertCardSql = `
-        INSERT INTO ${cardTable} (user_id, banco, alias, type, last_4, color, linked_google)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO ${cardTable} (user_id, banco, bankname, alias, type, last_4, last4, color, linked_google)
+        VALUES ($1, $2, $2, $3, $4, $5, $5, $6, $7)
         RETURNING *;
       `;
       const cardValues = [
@@ -303,7 +308,6 @@ transactionRoutes.post("/google-pay", async (c) => {
       cardRow = newCardRes.rows[0];
     }
 
-    // 2. Buscar o crear categoria 'Google Pay' (usuario o global)
     const categoryQuery = `
       SELECT * FROM ${categoryTable}
       WHERE LOWER(name) = 'google pay'
@@ -331,7 +335,6 @@ transactionRoutes.post("/google-pay", async (c) => {
       categoryRow = newCatRes.rows[0];
     }
 
-    // 3. Crear transaccion
     let txDate = new Date();
     if (body.date) {
       const parsedDate = new Date(body.date);
@@ -345,8 +348,8 @@ transactionRoutes.post("/google-pay", async (c) => {
     const type = "gasto";
 
     const insertTxSql = `
-      INSERT INTO ${transactionTable} (user_id, category_id, card_id, type, amount, date, note, origin)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO ${transactionTable} (user_id, category_id, card_id, type, amount, date, note, title, origin, is_auto)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9)
       RETURNING *;
     `;
     const txValues = [
@@ -358,6 +361,7 @@ transactionRoutes.post("/google-pay", async (c) => {
       txDate,
       note,
       origin,
+      true,
     ];
     const txRes = await query(insertTxSql, txValues);
     const savedTx = txRes.rows[0];
@@ -370,13 +374,13 @@ transactionRoutes.post("/google-pay", async (c) => {
       type: savedTx.type || type,
       amount: Number(savedTx.amount),
       date: savedTx.date ? new Date(savedTx.date).toISOString() : txDate.toISOString(),
-      note: savedTx.note ?? note,
+      note: savedTx.note || savedTx.title || note,
       origin: savedTx.origin || origin,
       categoryName: categoryRow.name || "Google Pay",
       categoryColor: categoryRow.color || "#4285F4",
       categoryIcon: categoryRow.icon || "contactless",
-      cardBanco: cardRow.banco || "Google Pay",
-      cardLast4: cardRow.last_4 || cardLast4,
+      cardBanco: cardRow.banco || cardRow.bankname || "Google Pay",
+      cardLast4: cardRow.last_4 || cardRow.last4 || cardLast4,
     };
 
     return c.json(
@@ -390,7 +394,7 @@ transactionRoutes.post("/google-pay", async (c) => {
     return c.json(
       {
         error: "Error procesando transaccion automatica de Google Pay",
-        details: err.message,
+        details: err.detail || err.message,
       },
       500
     );
@@ -408,6 +412,7 @@ transactionRoutes.post("/", async (c) => {
   const note = body.note ?? body.title ?? null;
   const type = body.type ?? "gasto";
   const origin = body.origin ?? (body.isAuto ? "automático_google_pay" : "manual");
+  const isAuto = Boolean(body.isAuto || origin === "automático_google_pay");
   const date = body.date ? new Date(body.date) : new Date();
 
   if (amount === undefined || isNaN(Number(amount))) {
@@ -418,11 +423,11 @@ transactionRoutes.post("/", async (c) => {
     const { transactionTable } = await getTables();
 
     const insertQuery = `
-      INSERT INTO ${transactionTable} (user_id, category_id, card_id, type, amount, date, note, origin)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO ${transactionTable} (user_id, category_id, card_id, type, amount, date, note, title, origin, is_auto)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9)
       RETURNING *;
     `;
-    const values = [userId, categoryId, cardId, type, amount, date, note, origin];
+    const values = [userId, categoryId, cardId, type, amount, date, note, origin, isAuto];
     const result = await query(insertQuery, values);
     const saved = result.rows[0];
 
@@ -434,7 +439,7 @@ transactionRoutes.post("/", async (c) => {
       201
     );
   } catch (err: any) {
-    return c.json({ error: "Error creando transaccion", details: err.message }, 500);
+    return c.json({ error: "Error creando transaccion", details: err.detail || err.message }, 500);
   }
 });
 
@@ -464,7 +469,9 @@ const updateHandler = async (c: any) => {
         category_id = CASE WHEN $3::boolean THEN $4 ELSE category_id END,
         card_id = CASE WHEN $5::boolean THEN $6 ELSE card_id END,
         note = CASE WHEN $7::boolean THEN $8 ELSE note END,
+        title = CASE WHEN $7::boolean THEN $8 ELSE title END,
         origin = COALESCE($9, origin),
+        is_auto = CASE WHEN $9::text = 'automático_google_pay' THEN true ELSE is_auto END,
         date = COALESCE($10, date)
       WHERE id = $11 AND user_id = $12
       RETURNING *;
@@ -494,7 +501,7 @@ const updateHandler = async (c: any) => {
       data: mapTransactionRow(result.rows[0]),
     });
   } catch (err: any) {
-    return c.json({ error: "Error actualizando transaccion", details: err.message }, 500);
+    return c.json({ error: "Error actualizando transaccion", details: err.detail || err.message }, 500);
   }
 };
 
@@ -527,7 +534,7 @@ const deleteHandler = async (c: any) => {
       message: "Transaccion eliminada correctamente",
     });
   } catch (err: any) {
-    return c.json({ error: "Error eliminando transaccion", details: err.message }, 500);
+    return c.json({ error: "Error eliminando transaccion", details: err.detail || err.message }, 500);
   }
 };
 

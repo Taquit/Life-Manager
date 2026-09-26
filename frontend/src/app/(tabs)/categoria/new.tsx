@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { ThemeTokens, Radii } from '@/constants/theme';
-import { categoriesApi } from '@/services/api';
+import { categoriesApi, getApiErrorMessage } from '@/services/api';
 
 const CATEGORY_COLORS = [
   '#FF9142', // Alimentación
@@ -53,7 +53,7 @@ export default function NewCategoryScreen() {
       router.back();
     } catch (err) {
       console.error('Error creando categoría:', err);
-      Alert.alert('Error', 'No se pudo guardar la categoría.');
+      Alert.alert('Error', getApiErrorMessage(err));
     } finally {
       setSaving(false);
     }

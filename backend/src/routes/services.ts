@@ -71,7 +71,7 @@ serviceRoutes.get("/", async (c) => {
       data,
     });
   } catch (err: any) {
-    return c.json({ error: "Error obteniendo servicios", details: err.message }, 500);
+    return c.json({ error: "Error obteniendo servicios", details: err.detail || err.message }, 500);
   }
 });
 
@@ -93,7 +93,7 @@ serviceRoutes.get("/:id", async (c) => {
       data: service,
     });
   } catch (err: any) {
-    return c.json({ error: "Error obteniendo servicio", details: err.message }, 500);
+    return c.json({ error: "Error obteniendo servicio", details: err.detail || err.message }, 500);
   }
 });
 
@@ -134,7 +134,7 @@ serviceRoutes.post("/", async (c) => {
       201
     );
   } catch (err: any) {
-    return c.json({ error: "Error creando servicio", details: err.message }, 500);
+    return c.json({ error: "Error creando servicio", details: err.detail || err.message }, 500);
   }
 });
 
@@ -180,7 +180,7 @@ serviceRoutes.put("/:id/pay", async (c) => {
       data: fullService,
     });
   } catch (err: any) {
-    return c.json({ error: "Error actualizando servicio", details: err.message }, 500);
+    return c.json({ error: "Error actualizando servicio", details: err.detail || err.message }, 500);
   }
 });
 
@@ -239,7 +239,7 @@ const updateServiceHandler = async (c: any) => {
       data: fullService,
     });
   } catch (err: any) {
-    return c.json({ error: "Error actualizando servicio", details: err.message }, 500);
+    return c.json({ error: "Error actualizando servicio", details: err.detail || err.message }, 500);
   }
 };
 
@@ -273,7 +273,7 @@ const deleteServiceHandler = async (c: any) => {
       id: String(result.rows[0].id),
     });
   } catch (err: any) {
-    return c.json({ error: "Error eliminando servicio", details: err.message }, 500);
+    return c.json({ error: "Error eliminando servicio", details: err.detail || err.message }, 500);
   }
 };
 

@@ -48,10 +48,9 @@ categoryRoutes.get("/", async (c) => {
       data,
     });
   } catch (err: any) {
-    return c.json({ error: "Error obteniendo categorias", details: err.message }, 500);
+    return c.json({ error: "Error obteniendo categorias", details: err.detail || err.message }, 500);
   }
 });
-
 
 // POST /category
 categoryRoutes.post("/", async (c) => {
@@ -82,7 +81,7 @@ categoryRoutes.post("/", async (c) => {
       201
     );
   } catch (err: any) {
-    return c.json({ error: "Error creando categoria", details: err.message }, 500);
+    return c.json({ error: "Error creando categoria", details: err.detail || err.message }, 500);
   }
 });
 
@@ -128,7 +127,7 @@ const updateCategoryHandler = async (c: any) => {
       data: mapCategoryRow(result.rows[0]),
     });
   } catch (err: any) {
-    return c.json({ error: "Error actualizando categoria", details: err.message }, 500);
+    return c.json({ error: "Error actualizando categoria", details: err.detail || err.message }, 500);
   }
 };
 
@@ -161,7 +160,7 @@ const deleteCategoryHandler = async (c: any) => {
       message: "Categoria eliminada correctamente",
     });
   } catch (err: any) {
-    return c.json({ error: "Error eliminando categoria", details: err.message }, 500);
+    return c.json({ error: "Error eliminando categoria", details: err.detail || err.message }, 500);
   }
 };
 

@@ -104,8 +104,62 @@ export default function InicioScreen() {
             <Text style={styles.headerTitle}>{greeting}</Text>
             <Text style={styles.headerDate}>{currentDateInfo.headerDate}</Text>
           </View>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{userInitial}</Text>
+          <View style={styles.headerRightContainer}>
+            <Pressable
+              style={styles.headerActionBtn}
+              onPress={() => router.push('/permissions' as any)}
+            >
+              <SymbolView
+                name={{ ios: 'lock.shield', android: 'security', web: 'security' }}
+                size={18}
+                tintColor={ThemeTokens.incomeText}
+              />
+            </Pressable>
+            <Pressable
+              style={styles.headerActionBtn}
+              onPress={() => router.push('/(tabs)/debug-notifications' as any)}
+            >
+              <SymbolView
+                name={{ ios: 'hammer.fill', android: 'build', web: 'build' }}
+                size={18}
+                tintColor={ThemeTokens.brandText}
+              />
+            </Pressable>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{userInitial}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Banner de Registro Automatico Google Wallet */}
+        <View style={styles.autoCaptureBanner}>
+          <View style={styles.autoCaptureBannerLeft}>
+            <SymbolView
+              name={{ ios: 'wave.3.forward', android: 'contactless', web: 'contactless' }}
+              size={20}
+              tintColor={ThemeTokens.incomeText}
+              style={{ marginRight: 10 }}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.autoCaptureTitle}>Captura Google Wallet</Text>
+              <Text style={styles.autoCaptureSubtitle}>
+                Registra compras NFC al instante en segundo plano.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.autoCaptureActions}>
+            <Pressable
+              style={styles.bannerBtnSecondary}
+              onPress={() => router.push('/permissions' as any)}
+            >
+              <Text style={styles.bannerBtnTextSecondary}>Permisos</Text>
+            </Pressable>
+            <Pressable
+              style={styles.bannerBtnPrimary}
+              onPress={() => router.push('/(tabs)/debug-notifications' as any)}
+            >
+              <Text style={styles.bannerBtnTextPrimary}>Depurar</Text>
+            </Pressable>
           </View>
         </View>
 
@@ -355,6 +409,21 @@ const styles = StyleSheet.create({
     color: '#B4A9E0',
     marginTop: 2,
   },
+  headerRightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerActionBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#17142B',
+    borderWidth: 1,
+    borderColor: '#2E2757',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   avatar: {
     width: 40,
     height: 40,
@@ -369,6 +438,59 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: '#C7A9FF',
+  },
+  autoCaptureBanner: {
+    backgroundColor: '#17142B',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#7C3AED',
+    marginBottom: 20,
+  },
+  autoCaptureBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  autoCaptureTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#F2EEFC',
+  },
+  autoCaptureSubtitle: {
+    fontSize: 12,
+    color: '#B4A9E0',
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  autoCaptureActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  bannerBtnSecondary: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#241F42',
+    borderWidth: 1,
+    borderColor: '#2E2757',
+  },
+  bannerBtnPrimary: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#7C3AED',
+  },
+  bannerBtnTextSecondary: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#B84FFF',
+  },
+  bannerBtnTextPrimary: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   heroCard: {
     backgroundColor: '#26134D',
