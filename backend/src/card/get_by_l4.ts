@@ -1,20 +1,13 @@
 import { APIGatewayProxyEventV2 } from "aws-lambda";
-import { Resource } from "sst";
-import { Client } from "pg";
 import { verifyToken } from "../utils/auth";
+import { query, jsonResponse } from "../utils/db";
 
 export const handler = async (event: APIGatewayProxyEventV2) => {
-
     let userPayload;
-
     try {
         userPayload = verifyToken(event);
     } catch (error: any) {
-        return {
-            statusCode: 401,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ error: error.message }),
-        };
+        return jsonResponse(401, { error: error.message });
     }
 
     const user_id = userPayload.user_id;
@@ -22,71 +15,40 @@ export const handler = async (event: APIGatewayProxyEventV2) => {
     const last4 = queryStringParameters.l4 || queryStringParameters.last4;
 
     if (!user_id) {
-        return {
-            statusCode: 400,
-            headers: { "Content-type": "application/json" },
-            body: JSON.stringify({ error: "Falta el user_id en el token" })
-        }
+        return jsonResponse(400, { error: "Falta el user_id en el token" });
     }
 
     if (!last4) {
-        return {
-            statusCode: 400,
-            headers: { "Content-type": "application/json" },
-            body: JSON.stringify({ error: "Falta el parámetro last4" })
-        }
+        return jsonResponse(400, { error: "Falta el parámetro last4 (o l4)" });
     }
-
-    const client = new Client({
-        connectionString: Resource.DATABASE_URL.value,
-        ssl: { rejectUnauthorized: false }
-    })
-
-    await client.connect();
 
     try {
         const searchCardQuery = `
-            SELECT id
+            SELECT id, bankname, alias, last4
             FROM card 
             WHERE last4 = $1 
-            AND user_id = $2;
+            AND user_id = $2
+            LIMIT 1;
         `;
         const values = [last4, user_id];
-        const result = await client.query(searchCardQuery, values);
+        const result = await query(searchCardQuery, values);
 
         if (result.rows.length === 0) {
-            return {
-                statusCode: 404,
-                headers: { "Content-type": "application/json" },
-                body: JSON.stringify({ error: "Tarjeta no encontrada" })
-            }
+            return jsonResponse(404, { error: "Tarjeta no encontrada" });
         }
 
-        const card_id = result.rows[0].id;
+        const card = result.rows[0];
 
-        return {
-            statusCode: 200,
-            headers: {
-                "Content-type": "application/json"
-            },
-            body: JSON.stringify({
-                message: "Tarjeta obtenida correctamente",
-                id: card_id
-            })
-        }
+        return jsonResponse(200, {
+            message: "Tarjeta obtenida correctamente",
+            id: card.id,
+            data: card
+        });
     } catch (error: any) {
-        return {
-            statusCode: 500,
-            headers: {
-                "Content-type": "application/json"
-            },
-            body: JSON.stringify({
-                error: "Error interno del servidor",
-                details: error.message
-            })
-        }
-    } finally {
-        await client.end();
+        console.error("Error al buscar tarjeta por last4:", error);
+        return jsonResponse(500, {
+            error: "Error interno del servidor",
+            details: error.message
+        });
     }
-
-}
+};

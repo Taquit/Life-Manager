@@ -1,7 +1,7 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useTheme } from "@/hooks/use-theme";
-import api from "@/services/api";
+import api, { getErrorMessage } from "@/services/api";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, TextInput, View } from "react-native";
@@ -29,7 +29,7 @@ export default function NewCategoriaPage() {
             ]);
         } catch (error) {
             console.error("Error guardando:", error);
-            Alert.alert("Error", "No se pudo guardar.");
+            Alert.alert("Error", getErrorMessage(error));
         } finally {
             setIsSaving(false);
         }

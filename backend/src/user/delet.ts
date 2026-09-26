@@ -1,48 +1,32 @@
 import { APIGatewayProxyEventV2 } from "aws-lambda";
-import { Resource } from "sst";
-import { Client } from "pg";
 import { verifyToken } from "../utils/auth";
+import { query, jsonResponse } from "../utils/db";
 
 export const handler = async (event: APIGatewayProxyEventV2) => {
     let userPayload;
     try {
         userPayload = verifyToken(event);
     } catch (error: any) {
-        return {
-            statusCode: 401,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ error: error.message }),
-        };
+        return jsonResponse(401, { error: error.message });
     }
 
-    const client = new Client({
-        connectionString: Resource.DATABASE_URL.value,
-        ssl: { rejectUnauthorized: false }
-    });
-
-    await client.connect();
-
     try {
-        const deleteQuery = `DELETE FROM users WHERE id = $1`;
-        const values = [userPayload.user_id];
+        const user_id = userPayload.user_id;
 
-        await client.query(deleteQuery, values);
+        // Limpiar registros relacionados antes de borrar el usuario
+        await query(`DELETE FROM transactions WHERE user_id = $1`, [user_id]);
+        await query(`DELETE FROM card WHERE user_id = $1`, [user_id]);
+        await query(`DELETE FROM category WHERE user_id = $1`, [user_id]);
+        await query(`DELETE FROM users WHERE id = $1`, [user_id]);
 
-        return {
-            statusCode: 200,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                message: "Cuenta de usuario eliminada correctamente",
-            }),
-        };
-    } catch (error) {
+        return jsonResponse(200, {
+            message: "Cuenta de usuario y datos asociados eliminados correctamente",
+        });
+    } catch (error: any) {
         console.error("Error eliminando usuario:", error);
-        return {
-            statusCode: 500,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ error: "Error interno en el servidor" }),
-        };
-    } finally {
-        await client.end();
+        return jsonResponse(500, {
+            error: "Error interno en el servidor",
+            details: error.message
+        });
     }
 };

@@ -18,7 +18,12 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.double_m_react"
+      "package": "com.anonymous.double_m_react",
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "POST_NOTIFICATIONS",
+        "VIBRATE"
+      ]
     },
     "web": {
       "output": "static",
@@ -37,6 +42,12 @@
           "backgroundColor": "#208AEF",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#10B981"
         }
       ]
     ],

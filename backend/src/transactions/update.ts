@@ -1,47 +1,32 @@
 import { APIGatewayProxyEventV2 } from "aws-lambda";
-import { Resource } from "sst";
-import { Client } from "pg"; // Librería oficial de Node para PostgreSQL
 import { verifyToken } from "../utils/auth";
+import { query, jsonResponse } from "../utils/db";
 
 export const handler = async (event: APIGatewayProxyEventV2) => {
     let userPayload;
     try {
         userPayload = verifyToken(event);
     } catch (error: any) {
-        return {
-            statusCode: 401,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ error: error.message }),
-        };
+        return jsonResponse(401, { error: error.message });
     }
 
     const body = event.body ? JSON.parse(event.body) : {};
-    const id = body.id;
+    const id = body.id || (event.queryStringParameters && event.queryStringParameters.id);
     const title = body.title;
     const amount = body.amount;
-    const category_id = body.category_id || null;
-    const isAuto = body.isAuto ?? false;
-    const card_id = body.card_id || null;
+    const category_id = body.category_id !== undefined ? body.category_id : null;
+    const isAuto = body.isAuto !== undefined ? body.isAuto : (body.is_auto !== undefined ? body.is_auto : false);
+    const card_id = body.card_id !== undefined ? body.card_id : null;
     const date = body.date;
-    const user_id = userPayload.user_id; // Obtenido del token
+    const user_id = userPayload.user_id;
 
-    if (!id || !title || amount === undefined) {
-        return {
-            statusCode: 400,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ error: "Faltan datos obligatorios: id, título o monto" }),
-        };
+    if (!id) {
+        return jsonResponse(400, {
+            error: "Falta el id de la transacción"
+        });
     }
 
-    const client = new Client({
-        connectionString: Resource.DATABASE_URL.value,
-        ssl: { rejectUnauthorized: false }
-    });
-
-    await client.connect();
-
     try {
-        // Actualizamos solo los campos que se enviaron, dejando los demás intactos
         const updateQuery = `
             UPDATE transactions
             SET
@@ -54,35 +39,23 @@ export const handler = async (event: APIGatewayProxyEventV2) => {
             WHERE id = $6 AND user_id = $7
             RETURNING *;
         `;
-        const values = [title, amount, category_id, isAuto, card_id, id, user_id, date ?? null];
-
-        const result = await client.query(updateQuery, values);
+        const values = [title, amount !== undefined ? Number(amount) : null, category_id, isAuto, card_id, id, user_id, date ?? null];
+        const result = await query(updateQuery, values);
         const updatedTransaction = result.rows[0];
 
         if (!updatedTransaction) {
-            return {
-                statusCode: 404,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ error: "Transacción no encontrada" }),
-            };
+            return jsonResponse(404, { error: "Transacción no encontrada o no pertenece al usuario" });
         }
 
-        return {
-            statusCode: 200,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                message: "Transacción actualizada exitosamente",
-                data: updatedTransaction
-            }),
-        };
-    } catch (error) {
-        console.error("Error actualizando en la BD:", error);
-        return {
-            statusCode: 500,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ error: "Error interno en el servidor" }),
-        };
-    } finally {
-        await client.end();
+        return jsonResponse(200, {
+            message: "Transacción actualizada exitosamente",
+            data: updatedTransaction
+        });
+    } catch (error: any) {
+        console.error("Error actualizando transacción en la BD:", error);
+        return jsonResponse(500, {
+            error: "Error interno en el servidor",
+            details: error.message
+        });
     }
-}
+};

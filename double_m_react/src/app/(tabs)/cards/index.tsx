@@ -1,9 +1,9 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import api from '@/services/api';
+import api, { getErrorMessage } from '@/services/api';
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Alert, Pressable, View, StyleSheet, ActivityIndicator } from "react-native";
+import { Alert, Pressable, View, StyleSheet, ActivityIndicator, ScrollView, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/use-theme";
 import { SymbolView } from "expo-symbols";
@@ -13,7 +13,7 @@ export type Card = {
     bankname: string;
     alias: string;
     last4: string;
-    userid: string;
+    user_id: string;
 };
 
 export default function CardPage() {
@@ -22,23 +22,33 @@ export default function CardPage() {
 
     const [items, setItems] = useState<Card[]>([]);
     const [loading, setLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    const loadItems = async () => {
+    const loadItems = async (isPullToRefresh = false) => {
         try {
-            setLoading(true);
+            if (isPullToRefresh) {
+                setRefreshing(true);
+            } else {
+                setLoading(true);
+            }
+            setErrorMessage(null);
             const response = await api.get('/card');
-            setItems(response.data.data || response.data);
+            setItems(response.data.data || response.data || []);
         } catch (error) {
             console.error("Error cargando mis tarjetas:", error);
+            const msg = getErrorMessage(error);
+            setErrorMessage(msg);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
-    }
+    };
 
     const handleDelete = async (itemId: string) => {
         Alert.alert(
-            "Eliminar",
-            "¿Estás seguro de que quieres eliminar este elemento?",
+            "Eliminar Tarjeta",
+            "¿Estás seguro de que deseas eliminar esta tarjeta?",
             [
                 { text: "Cancelar", style: "cancel" },
                 {
@@ -46,16 +56,20 @@ export default function CardPage() {
                     style: "destructive",
                     onPress: async () => {
                         try {
-                            await api.delete(`/card/${itemId}`);
+                            setLoading(true);
+                            // Se envía en el body para coincidir con la ruta DELETE /card
+                            await api.delete('/card', { data: { id: itemId } });
                             loadItems();
                         } catch (error) {
-                            console.error("Error eliminando:", error);
+                            console.error("Error eliminando tarjeta:", error);
+                            Alert.alert("Error al eliminar", getErrorMessage(error));
+                            setLoading(false);
                         }
                     }
                 }
             ]
-        )
-    }
+        );
+    };
 
     useFocusEffect(
         useCallback(() => {
@@ -68,12 +82,27 @@ export default function CardPage() {
             <SafeAreaView style={styles.safeArea}>
                 <ThemedText type="title" style={styles.headerTitle}>Mis Tarjetas</ThemedText>
                 
-                {loading ? (
+                {errorMessage && (
+                    <View style={styles.errorBanner}>
+                        <ThemedText style={styles.errorText}>⚠️ {errorMessage}</ThemedText>
+                        <Pressable onPress={() => loadItems()} style={styles.retryButton}>
+                            <ThemedText style={styles.retryButtonText}>Reintentar</ThemedText>
+                        </Pressable>
+                    </View>
+                )}
+
+                {loading && !refreshing ? (
                     <ActivityIndicator size="large" color="#10B981" style={{ marginTop: 50 }} />
                 ) : (
-                    <View style={styles.listContainer}>
+                    <ScrollView 
+                        style={styles.listContainer}
+                        showsVerticalScrollIndicator={false}
+                        refreshControl={
+                            <RefreshControl refreshing={refreshing} onRefresh={() => loadItems(true)} colors={['#10B981']} />
+                        }
+                    >
                         {items.length === 0 ? (
-                            <ThemedText style={styles.emptyText}>No hay elementos registrados aún.</ThemedText>
+                            <ThemedText style={styles.emptyText}>No hay tarjetas registradas aún.</ThemedText>
                         ) : (
                             items.map((item) => (
                                 <View key={item.id} style={[styles.cardContainer, { backgroundColor: theme.backgroundElement }]}>
@@ -102,7 +131,7 @@ export default function CardPage() {
                                 </View>
                             ))
                         )}
-                    </View>
+                    </ScrollView>
                 )}
 
                 <Pressable 
@@ -114,15 +143,29 @@ export default function CardPage() {
                 </Pressable>
             </SafeAreaView>
         </ThemedView>
-    )
+    );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
     safeArea: { flex: 1, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 24 },
-    headerTitle: { fontSize: 32, fontWeight: '800', marginBottom: 24 },
+    headerTitle: { fontSize: 32, fontWeight: '800', marginBottom: 20 },
     listContainer: { flex: 1 },
     emptyText: { textAlign: 'center', marginTop: 40, opacity: 0.5, fontSize: 16 },
+    errorBanner: {
+        backgroundColor: '#FEE2E2',
+        borderColor: '#EF4444',
+        borderWidth: 1,
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    errorText: { color: '#B91C1C', fontSize: 14, flex: 1 },
+    retryButton: { backgroundColor: '#EF4444', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, marginLeft: 8 },
+    retryButtonText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
     cardContainer: { 
         borderRadius: 20, 
         padding: 20, 
@@ -157,11 +200,11 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginTop: 16,
         gap: 8,
-        shadowColor: "#10B981",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4
+        shadowColor: "#10B981", 
+        shadowOffset: { width: 0, height: 4 }, 
+        shadowOpacity: 0.3, 
+        shadowRadius: 8, 
+        elevation: 4 
     },
     addButtonText: { color: '#ffffff', fontSize: 18, fontWeight: 'bold' }
 });

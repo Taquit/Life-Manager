@@ -1,7 +1,7 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useTheme } from "@/hooks/use-theme";
-import api from "@/services/api";
+import api, { getErrorMessage } from "@/services/api";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useCallback, useState } from "react";
@@ -35,7 +35,7 @@ export default function EditCardPage() {
                     if (item) setItemData(item);
                 } catch (error) {
                     console.error("Error obteniendo:", error);
-                    Alert.alert("Error", "No se pudo cargar la información.");
+                    Alert.alert("Error", getErrorMessage(error));
                 } finally {
                     setIsLoading(false);
                 }
@@ -53,7 +53,7 @@ export default function EditCardPage() {
             ]);
         } catch (error) {
             console.error("Error editando:", error);
-            Alert.alert("Error", "No se pudo guardar.");
+            Alert.alert("Error", getErrorMessage(error));
         } finally {
             setIsSaving(false);
         }

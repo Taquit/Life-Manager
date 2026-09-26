@@ -1,32 +1,19 @@
 import { APIGatewayProxyEventV2 } from "aws-lambda";
-import { Resource } from "sst";
-import { Client } from "pg";
 import { verifyToken } from "../utils/auth";
+import { query, jsonResponse } from "../utils/db";
 
 export const handler = async (event: APIGatewayProxyEventV2) => {
     let userPayload;
     try {
         userPayload = verifyToken(event);
     } catch (error: any) {
-        return {
-            statusCode: 401,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ error: error.message }),
-        };
+        return jsonResponse(401, { error: error.message });
     }
 
     const body = event.body ? JSON.parse(event.body) : {};
     const { name, email } = body;
 
-    const client = new Client({
-        connectionString: Resource.DATABASE_URL.value,
-        ssl: { rejectUnauthorized: false }
-    });
-
-    await client.connect();
-
     try {
-        // Actualizamos name y email si vienen en el body (usando COALESCE)
         const updateQuery = `
             UPDATE users 
             SET 
@@ -36,33 +23,21 @@ export const handler = async (event: APIGatewayProxyEventV2) => {
             RETURNING id, name, email;
         `;
         const values = [name, email, userPayload.user_id];
-
-        const result = await client.query(updateQuery, values);
+        const result = await query(updateQuery, values);
 
         if (result.rows.length === 0) {
-            return {
-                statusCode: 404,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ error: "Usuario no encontrado" }),
-            };
+            return jsonResponse(404, { error: "Usuario no encontrado" });
         }
 
-        return {
-            statusCode: 200,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                message: "Usuario actualizado correctamente",
-                data: result.rows[0],
-            }),
-        };
-    } catch (error) {
+        return jsonResponse(200, {
+            message: "Usuario actualizado correctamente",
+            data: result.rows[0],
+        });
+    } catch (error: any) {
         console.error("Error actualizando usuario:", error);
-        return {
-            statusCode: 500,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ error: "Error interno en el servidor" }),
-        };
-    } finally {
-        await client.end();
+        return jsonResponse(500, {
+            error: "Error interno en el servidor",
+            details: error.message
+        });
     }
 };
