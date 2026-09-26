@@ -1,0 +1,59 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import 'expo-router/entry';
+import { AppRegistry, Platform } from 'react-native';
+import { RNAndroidNotificationListenerHeadlessJsName } from 'react-native-android-notification-listener';
+import { notiProcesor } from './src/services/notiProcesor';
+import api from './src/services/api';
+const headlessNotificationListener = async ({ notification }) => {
+    if (notification) {
+        try {
+            // Parse the notification payload which is passed as a JSON string
+            const notificationData = typeof notification === 'string' ? JSON.parse(notification) : notification;
+            console.log('Received notification in background:', notificationData);
+
+            // Lista de paquetes permitidos (exclusivo para Google Pay)
+            const ALLOWED_PACKAGES = [
+                'com.google.android.apps.walletnfcrel',
+                'com.google.android.apps.nfc.payment',
+            ];
+
+            const appName = (notificationData.app || '').toLowerCase();
+            const isGooglePay = ALLOWED_PACKAGES.includes(notificationData.app) ||
+                appName.includes('wallet') ||
+                appName.includes('google pay');
+
+            // Si la app de la notificacion no es de Google Pay, la ignoramos
+            if (!isGooglePay) {
+                return;
+            }
+
+            // Guardamos la notificacion en el almacenamiento local para poder leerla desde la pantalla de debug
+            const existingStr = await AsyncStorage.getItem('@debug_notifications');
+            let existing = [];
+            if (existingStr) {
+                existing = JSON.parse(existingStr);
+            }
+
+            // Anadimos la nueva y guardamos (maximo 50 para no llenar la memoria)
+            existing.unshift(notificationData);
+            if (existing.length > 50) existing.length = 50;
+
+            await AsyncStorage.setItem('@debug_notifications', JSON.stringify(existing));
+
+            // Procesar y registrar transaccion automatica en el backend
+            const createdTx = await notiProcesor(notificationData);
+            if (createdTx) {
+                console.log('Transaccion automatica Google Pay registrada con exito:', createdTx);
+            }
+
+        } catch (error) {
+            console.error('Error processing notification:', error);
+        }
+    }
+};
+
+// Se registra la tarea en segundo plano (Headless JS) para escuchar notificaciones solo en Android
+if (Platform.OS === 'android' && typeof AppRegistry.registerHeadlessTask === 'function') {
+  AppRegistry.registerHeadlessTask(RNAndroidNotificationListenerHeadlessJsName, () => headlessNotificationListener);
+}
+

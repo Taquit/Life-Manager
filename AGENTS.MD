@@ -13,6 +13,7 @@ To prevent conflicting edits and maintain clean domain separation, agents must s
 | **`@backend-dev`** | `packages/backend/**`, `infra/**`, `sst.config.ts`, `migrations/**` | Root configs, types, shared specs | Any frontend or client directory (`packages/frontend/**`, `apps/**`, `extra.md`) |
 | **`@frontend-dev`** | `packages/frontend/**` (or app root per `extra.md`) | Backend contracts, shared types, `extra.md` | Any backend, database, infra, or SST configuration files |
 | **`@contract-reviewer`** | *None (Read-Only)* | Entire repository | All files across the repository |
+| **`@compilador`** | Build configs, gradle configs, packaging scripts, root APK copy | Entire repository (for build execution) | Application source code (`src/**`), `.env` files |
 
 ---
 
@@ -21,6 +22,7 @@ To prevent conflicting edits and maintain clean domain separation, agents must s
 - **`@backend-dev`** (`.agents/agents/backend-dev.md`): Senior Backend Developer handling SST v4 infrastructure, AWS Lambda handlers, PostgreSQL persistence, and API contract design.
 - **`@frontend-dev`** (`.agents/agents/frontend-dev.md`): Senior Frontend Developer handling views, state management, client validation, and API consumption per guidelines in `extra.md`.
 - **`@contract-reviewer`** (`.agents/agents/contract-reviewer.md`): Quality and Integration Gatekeeper auditing DTO parity, JSON casing consistency, HTTP signatures, and type alignment.
+- **`@compilador`** (`.agents/agents/compilador.md`): Build & Compilation Specialist handling frontend and backend build execution, resolving environment/dependency errors autonomously, and delegating source code errors to `@frontend-dev` or `@backend-dev`.
 
 ---
 

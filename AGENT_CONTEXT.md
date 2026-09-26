@@ -40,6 +40,7 @@ Money_app/
 ├── .agents/                    # Subagent definitions
 │   └── agents/
 │       ├── backend-dev.md      # Backend specialist subagent
+│       ├── compilador.md       # Build and compilation specialist subagent
 │       ├── contract-reviewer.md# Contract audit subagent
 │       └── frontend-dev.md     # Frontend specialist subagent
 ├── backend/                    # SST v4 Backend project

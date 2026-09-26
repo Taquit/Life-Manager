@@ -14,9 +14,10 @@ CREATE TABLE public.Category (
 CREATE TABLE public.Card (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   user_id uuid NOT NULL,
+  alias text,
   banco text NOT NULL,
   type text,
-  last_4 character varying,
+  last_4 character varying(4),
   color text,
   linked_google boolean DEFAULT false,
   cut_day integer,
