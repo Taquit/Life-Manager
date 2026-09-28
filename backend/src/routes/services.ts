@@ -145,39 +145,65 @@ serviceRoutes.put("/:id/pay", async (c) => {
   const body = await c.req.json().catch(() => ({}));
 
   try {
-    const { serviceTable, categoryTable } = await getTables();
+    const { serviceTable, categoryTable, transactionTable } = await getTables();
 
-    let updateQuery: string;
-    let params: any[];
-
-    if (body.state) {
-      updateQuery = `
-        UPDATE ${serviceTable}
-        SET state = $1
-        WHERE id = $2 AND user_id = $3
-        RETURNING id;
-      `;
-      params = [body.state, id, userId];
-    } else {
-      updateQuery = `
-        UPDATE ${serviceTable}
-        SET state = CASE WHEN LOWER(state) = 'pagado' THEN 'pendiente' ELSE 'pagado' END
-        WHERE id = $1 AND user_id = $2
-        RETURNING id;
-      `;
-      params = [id, userId];
-    }
-
-    const result = await query(updateQuery, params);
-    if (result.rows.length === 0) {
+    const currentService = await fetchServiceWithCategory(serviceTable, categoryTable, id, userId);
+    if (!currentService) {
       return c.json({ error: "Servicio no encontrado" }, 404);
     }
 
+    const targetState = body.state
+      ? String(body.state).toLowerCase()
+      : currentService.state.toLowerCase() === "pagado"
+      ? "pendiente"
+      : "pagado";
+
+    const updateQuery = `
+      UPDATE ${serviceTable}
+      SET state = $1
+      WHERE id = $2 AND user_id = $3
+      RETURNING id;
+    `;
+    await query(updateQuery, [targetState, id, userId]);
+
     const fullService = await fetchServiceWithCategory(serviceTable, categoryTable, id, userId);
 
+    let createdTransaction: any = null;
+    if (targetState === "pagado" && fullService) {
+      const insertTxSql = `
+        INSERT INTO ${transactionTable} (user_id, category_id, card_id, type, amount, date, note, title, origin, is_auto)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9)
+        RETURNING *;
+      `;
+      const txNote = "Pago de servicio: " + fullService.name;
+      const txValues = [
+        userId,
+        fullService.categoryId,
+        null,
+        "gasto",
+        fullService.amount,
+        new Date(),
+        txNote,
+        "manual",
+        false,
+      ];
+      const txRes = await query(insertTxSql, txValues);
+      createdTransaction = txRes.rows[0];
+    }
+
     return c.json({
-      message: "Estado de servicio actualizado correctamente",
+      message: createdTransaction
+        ? "Estado de servicio actualizado a pagado y transaccion registrada"
+        : "Estado de servicio actualizado correctamente",
       data: fullService,
+      transaction: createdTransaction
+        ? {
+            id: String(createdTransaction.id),
+            amount: Number(createdTransaction.amount),
+            type: createdTransaction.type,
+            note: createdTransaction.note,
+          }
+        : null,
     });
   } catch (err: any) {
     return c.json({ error: "Error actualizando servicio", details: err.detail || err.message }, 500);

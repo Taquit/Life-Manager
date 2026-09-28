@@ -8,6 +8,7 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -29,6 +30,7 @@ export default function MovimientosScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState('todas');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -106,6 +108,18 @@ export default function MovimientosScreen() {
     return [...base, ...catChips];
   }, [categories]);
 
+  // Filter transactions by search query
+  const filteredTransactions = useMemo(() => {
+    if (!searchQuery.trim()) return transactions;
+    const q = searchQuery.toLowerCase();
+    return transactions.filter(
+      (tx) =>
+        (tx.note && tx.note.toLowerCase().includes(q)) ||
+        (tx.categoryName && tx.categoryName.toLowerCase().includes(q)) ||
+        (tx.cardBanco && tx.cardBanco.toLowerCase().includes(q))
+    );
+  }, [transactions, searchQuery]);
+
   // Group transactions by date
   const groupedTransactions = useMemo(() => {
     const now = new Date();
@@ -115,7 +129,7 @@ export default function MovimientosScreen() {
 
     const groups: Record<string, Transaction[]> = {};
 
-    transactions.forEach((tx) => {
+    filteredTransactions.forEach((tx) => {
       const txDateStr = tx.date ? tx.date.substring(0, 10) : todayStr;
       let label = txDateStr;
 
@@ -139,7 +153,7 @@ export default function MovimientosScreen() {
     });
 
     return groups;
-  }, [transactions]);
+  }, [filteredTransactions]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -158,6 +172,32 @@ export default function MovimientosScreen() {
             />
           </Pressable>
         </View>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchBarContainer}>
+        <SymbolView
+          name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
+          size={18}
+          tintColor="#8A7FBD"
+          style={{ marginRight: 10 }}
+        />
+        <TextInput
+          style={styles.searchTextInput}
+          placeholder="Buscar por concepto o categoría..."
+          placeholderTextColor="#8A7FBD"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        {searchQuery.length > 0 && (
+          <Pressable onPress={() => setSearchQuery('')} style={styles.clearSearchBtn}>
+            <SymbolView
+              name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
+              size={18}
+              tintColor="#8A7FBD"
+            />
+          </Pressable>
+        )}
       </View>
 
       {/* Month Selector */}
@@ -334,6 +374,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#2E2757',
+  },
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#17142B',
+    borderWidth: 1,
+    borderColor: '#2E2757',
+    borderRadius: 14,
+    marginHorizontal: 20,
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    height: 44,
+  },
+  searchTextInput: {
+    flex: 1,
+    color: '#F2EEFC',
+    fontSize: 14,
+  },
+  clearSearchBtn: {
+    padding: 4,
   },
   monthSelector: {
     flexDirection: 'row',

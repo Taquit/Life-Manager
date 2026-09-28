@@ -12,6 +12,7 @@ export interface Category {
   color: string;
   icon: string;
   count?: number;
+  budget?: number | null;
 }
 
 export interface Card {
@@ -98,6 +99,7 @@ export interface CategoryBreakdown {
   categoryIcon: string;
   totalAmount: number;
   percentage: number;
+  budget?: number | null;
 }
 
 export interface MonthlySummary {

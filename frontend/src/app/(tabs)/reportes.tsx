@@ -157,11 +157,23 @@ export default function ReportesScreen() {
                   <View style={styles.ratioBarEmpty} />
                 )}
               </View>
+              {totalExpense > totalIncome && (
+                <View style={styles.expenseWarningBanner}>
+                  <SymbolView
+                    name={{ ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' }}
+                    size={20}
+                    tintColor={ThemeTokens.expenseText}
+                  />
+                  <Text style={styles.expenseWarningText}>
+                    Atención: Tus gastos superan los ingresos este mes.
+                  </Text>
+                </View>
+              )}
             </View>
 
-            {/* Category Breakdown */}
+            {/* Distribucion y Presupuestos por Categoria */}
             <View style={styles.card}>
-              <Text style={styles.cardLabel}>DISTRIBUCIÓN POR CATEGORÍA</Text>
+              <Text style={styles.cardLabel}>DISTRIBUCIÓN Y PRESUPUESTOS</Text>
 
               {breakdown.length === 0 ? (
                 <Text style={styles.emptyBreakdownText}>
@@ -169,35 +181,68 @@ export default function ReportesScreen() {
                 </Text>
               ) : (
                 <View style={styles.breakdownList}>
-                  {breakdown.map((item) => (
-                    <View key={item.categoryId} style={styles.breakdownItem}>
-                      <View style={styles.breakdownHeader}>
-                        <View style={styles.breakdownCatInfo}>
+                  {breakdown.map((item) => {
+                    const hasBudget = typeof item.budget === 'number' && item.budget > 0;
+                    const budgetRatio = hasBudget ? (item.totalAmount / (item.budget as number)) * 100 : item.percentage;
+                    const isExceeded = hasBudget && budgetRatio >= 100;
+                    const isWarning = hasBudget && budgetRatio >= 80 && budgetRatio < 100;
+
+                    let barColor = item.categoryColor || ThemeTokens.brandFill;
+                    if (isExceeded) barColor = ThemeTokens.expenseText;
+                    else if (isWarning) barColor = ThemeTokens.pendingText;
+
+                    return (
+                      <View key={item.categoryId} style={styles.breakdownItem}>
+                        <View style={styles.breakdownHeader}>
+                          <View style={styles.breakdownCatInfo}>
+                            <View
+                              style={[
+                                styles.catDot,
+                                { backgroundColor: item.categoryColor || ThemeTokens.brandFill },
+                              ]}
+                            />
+                            <Text style={styles.catName}>{item.categoryName}</Text>
+                          </View>
+
+                          <View style={styles.amountBadgeRow}>
+                            {isExceeded && (
+                              <View style={styles.exceededBadge}>
+                                <Text style={styles.exceededBadgeText}>100%+ Excedido</Text>
+                              </View>
+                            )}
+                            {isWarning && (
+                              <View style={styles.warningBadge}>
+                                <Text style={styles.warningBadgeText}>80%+ Alerta</Text>
+                              </View>
+                            )}
+                            <Text style={styles.catAmount}>
+                              ${item.totalAmount.toFixed(2)}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.budgetSubHeader}>
+                          <Text style={styles.budgetDetailText}>
+                            {hasBudget
+                              ? `Presupuesto: $${(item.budget as number).toFixed(2)} (${budgetRatio.toFixed(0)}%)`
+                              : `Porcentaje del gasto: ${item.percentage}%`}
+                          </Text>
+                        </View>
+
+                        <View style={styles.track}>
                           <View
                             style={[
-                              styles.catDot,
-                              { backgroundColor: item.categoryColor || ThemeTokens.brandFill },
+                              styles.fill,
+                              {
+                                width: `${Math.min(budgetRatio, 100)}%`,
+                                backgroundColor: barColor,
+                              },
                             ]}
                           />
-                          <Text style={styles.catName}>{item.categoryName}</Text>
                         </View>
-                        <Text style={styles.catAmount}>
-                          ${item.totalAmount.toFixed(2)} ({item.percentage}%)
-                        </Text>
                       </View>
-                      <View style={styles.track}>
-                        <View
-                          style={[
-                            styles.fill,
-                            {
-                              width: `${Math.min(item.percentage, 100)}%`,
-                              backgroundColor: item.categoryColor || ThemeTokens.brandFill,
-                            },
-                          ]}
-                        />
-                      </View>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </View>
               )}
             </View>
@@ -353,5 +398,62 @@ const styles = StyleSheet.create({
   fill: {
     height: '100%',
     borderRadius: Radii.full,
+  },
+  amountBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  budgetSubHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  budgetDetailText: {
+    fontSize: 11.5,
+    color: ThemeTokens.textSecondary,
+  },
+  exceededBadge: {
+    backgroundColor: ThemeTokens.overdueBg,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Radii.full,
+    borderWidth: 1,
+    borderColor: ThemeTokens.expenseText,
+  },
+  exceededBadgeText: {
+    color: ThemeTokens.expenseText,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  warningBadge: {
+    backgroundColor: ThemeTokens.pendingBg,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Radii.full,
+    borderWidth: 1,
+    borderColor: ThemeTokens.pendingText,
+  },
+  warningBadgeText: {
+    color: ThemeTokens.pendingText,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  expenseWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: ThemeTokens.overdueBg,
+    borderWidth: 1,
+    borderColor: ThemeTokens.expenseFill,
+    borderRadius: Radii.card,
+    padding: 12,
+    marginTop: 14,
+    gap: 10,
+  },
+  expenseWarningText: {
+    flex: 1,
+    fontSize: 12.5,
+    color: ThemeTokens.expenseText,
+    fontWeight: '600',
+    lineHeight: 16,
   },
 });

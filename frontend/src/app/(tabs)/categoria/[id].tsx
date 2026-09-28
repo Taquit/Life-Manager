@@ -1,169 +1,298 @@
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { useTheme } from "@/hooks/use-theme";
-import api, { getApiErrorMessage } from "@/services/api";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, TextInput, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { SymbolView } from "expo-symbols";
-import { Categoria } from "./index";
+import React, { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  Pressable,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
+import { ThemeTokens, Radii } from '@/constants/theme';
+import { categoriesApi, getApiErrorMessage } from '@/services/api';
+import { Category } from '@/types';
+
+const CATEGORY_COLORS = [
+  '#FF9142', // Alimentación
+  '#4D9EFF', // Transporte
+  '#FFD23F', // Servicios
+  '#E14FFF', // Entretenimiento
+  '#FF6FB3', // Salud
+  '#2DE1C2', // Hogar
+  '#9B6BFF', // Compras
+  '#8B82B8', // Otros
+  '#39FFC4', // Nómina
+];
 
 export default function EditCategoriaPage() {
-    const { id } = useLocalSearchParams<{ id: string }>();
-    const router = useRouter();
-    const theme = useTheme();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
 
-    const [itemData, setItemData] = useState<Partial<Categoria>>({
-        id: "",
-        name: "",
-        color: ""
-    });
+  const [itemData, setItemData] = useState<Partial<Category>>({
+    id: '',
+    name: '',
+    color: CATEGORY_COLORS[0],
+    type: 'gasto',
+    budget: null,
+  });
 
-    const [isLoading, setIsLoading] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
+  const [budgetStr, setBudgetStr] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-    useFocusEffect(
-        useCallback(() => {
-            const fetchItem = async () => {
-                if (!id) return;
-                try {
-                    setIsLoading(true);
-                    const response = await api.get('/category');
-                    const item = response.data.data?.find((c: any) => c.id === id);
-                    if (item) setItemData(item);
-                } catch (error) {
-                    console.error("Error obteniendo:", error);
-                    Alert.alert("Error", getApiErrorMessage(error));
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-            fetchItem();
-        }, [id])
-    );
-
-    const handleSave = async () => {
+  useFocusEffect(
+    useCallback(() => {
+      const fetchItem = async () => {
+        if (!id) return;
         try {
-            setIsSaving(true);
-            await api.put('/category', { ...itemData, id });
-            Alert.alert("Éxito", "Actualizado correctamente", [
-                { text: "OK", onPress: () => router.back() }
-            ]);
+          setIsLoading(true);
+          const allCats = await categoriesApi.getAll();
+          const found = allCats.find((c) => c.id === id);
+          if (found) {
+            setItemData(found);
+            setBudgetStr(found.budget ? String(found.budget) : '');
+          }
         } catch (error) {
-            console.error("Error editando:", error);
-            Alert.alert("Error", getApiErrorMessage(error));
+          console.error('Error obteniendo categoría:', error);
+          Alert.alert('Error', getApiErrorMessage(error));
         } finally {
-            setIsSaving(false);
+          setIsLoading(false);
         }
+      };
+      fetchItem();
+    }, [id])
+  );
+
+  const handleSave = async () => {
+    if (!id) return;
+    if (!itemData.name?.trim()) {
+      Alert.alert('Error', 'Por favor ingresa un nombre para la categoría');
+      return;
     }
 
-    return (
-        <ThemedView style={[styles.container, { backgroundColor: theme.background }]}>
-            <SafeAreaView style={styles.safeArea}>
-                <View style={styles.header}>
-                    <Pressable onPress={() => router.back()} style={styles.backButton}>
-                        <SymbolView name={{ ios: 'chevron.backward', android: 'arrow_back', web: 'arrow_back' }} size={24} tintColor={theme.text} />
-                    </Pressable>
-                    <ThemedText type="title" style={styles.title}>Editar Categoría</ThemedText>
-                </View>
-                
-                {isLoading ? (
-                    <ActivityIndicator size="large" color="#3B82F6" style={{ marginTop: 50 }} />
-                ) : (
-                    <View style={styles.formContainer}>
-                        
-                        <ThemedText style={styles.label}>Nombre</ThemedText>
-                        <TextInput
-                            style={[styles.textInput, { borderColor: theme.backgroundElement, color: theme.text, backgroundColor: theme.backgroundElement }]}
-                            placeholderTextColor={theme.textSecondary}
-                            placeholder='Ej: Comida'
-                            
-                            
-                            value={itemData.name ? itemData.name.toString() : ""}
-                            onChangeText={(value) => setItemData({ ...itemData, name: value })}
-                        />
-                        <ThemedText style={styles.label}>Color</ThemedText>
-                        <View style={styles.colorPickerContainer}>
-                            {['#EF4444', '#F97316', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899'].map((color) => (
-                                <Pressable
-                                    key={color}
-                                    style={[
-                                        styles.colorCircle,
-                                        { backgroundColor: color },
-                                        itemData.color === color && styles.colorCircleSelected
-                                    ]}
-                                    onPress={() => setItemData({ ...itemData, color })}
-                                >
-                                    {itemData.color === color && (
-                                        <SymbolView name={{ ios: 'checkmark', android: 'check', web: 'check' }} size={20} tintColor="#fff" />
-                                    )}
-                                </Pressable>
-                            ))}
-                        </View>
+    const parsedBudget = budgetStr.trim() ? parseFloat(budgetStr) : null;
+    if (parsedBudget !== null && (isNaN(parsedBudget) || parsedBudget < 0)) {
+      Alert.alert('Error', 'Por favor ingresa un monto de presupuesto válido');
+      return;
+    }
 
-                        
+    try {
+      setIsSaving(true);
+      await categoriesApi.update(id, {
+        name: itemData.name.trim(),
+        color: itemData.color || CATEGORY_COLORS[0],
+        type: itemData.type || 'gasto',
+        budget: parsedBudget,
+      });
+      router.back();
+    } catch (error) {
+      console.error('Error editando categoría:', error);
+      Alert.alert('Error', getApiErrorMessage(error));
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-                        <Pressable 
-                            style={({ pressed }) => [styles.saveButton, (isSaving || pressed) && { opacity: 0.8 }]} 
-                            onPress={handleSave}
-                            disabled={isSaving}
-                        >
-                            {isSaving ? (
-                                <ActivityIndicator color="#fff" />
-                            ) : (
-                                <>
-                                    <SymbolView name={{ ios: 'checkmark', android: 'check', web: 'check' }} size={20} tintColor="#fff" />
-                                    <ThemedText style={styles.saveButtonText}>Guardar Cambios</ThemedText>
-                                </>
-                            )}
-                        </Pressable>
-                    </View>
-                )}
-            </SafeAreaView>
-        </ThemedView>
-    )
+  const handleDelete = () => {
+    Alert.alert(
+      'Eliminar Categoría',
+      `¿Deseas eliminar la categoría "${itemData.name}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            if (!id) return;
+            try {
+              setIsDeleting(true);
+              await categoriesApi.delete(id);
+              router.back();
+            } catch (err) {
+              Alert.alert('Error', getApiErrorMessage(err));
+            } finally {
+              setIsDeleting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.header}>
+        <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <SymbolView
+            name={{ ios: 'chevron.backward', android: 'arrow_back', web: 'arrow_back' }}
+            size={22}
+            tintColor={ThemeTokens.textPrimary}
+          />
+        </Pressable>
+        <Text style={styles.headerTitle}>Editar Categoría</Text>
+        <Pressable onPress={handleDelete} style={styles.deleteIconButton} disabled={isDeleting}>
+          <SymbolView
+            name={{ ios: 'trash', android: 'delete', web: 'delete' }}
+            size={20}
+            tintColor={ThemeTokens.expenseText}
+          />
+        </Pressable>
+      </View>
+
+      {isLoading ? (
+        <ActivityIndicator size="large" color={ThemeTokens.brandFill} style={{ marginTop: 40 }} />
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Nombre */}
+          <View style={styles.fieldSection}>
+            <Text style={styles.label}>Nombre de la categoría</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Ej: Cafetería, Gimnasio..."
+              placeholderTextColor={ThemeTokens.placeholder}
+              value={itemData.name || ''}
+              onChangeText={(text) => setItemData({ ...itemData, name: text })}
+            />
+          </View>
+
+          {/* Presupuesto */}
+          <View style={styles.fieldSection}>
+            <Text style={styles.label}>Presupuesto mensual ($)</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Ej: 3000.00 (opcional)"
+              placeholderTextColor={ThemeTokens.placeholder}
+              keyboardType="decimal-pad"
+              value={budgetStr}
+              onChangeText={setBudgetStr}
+            />
+          </View>
+
+          {/* Color */}
+          <View style={styles.fieldSection}>
+            <Text style={styles.label}>Color representativo</Text>
+            <View style={styles.colorsGrid}>
+              {CATEGORY_COLORS.map((c) => (
+                <Pressable
+                  key={c}
+                  style={[
+                    styles.colorCircle,
+                    { backgroundColor: c },
+                    itemData.color === c && styles.colorCircleSelected,
+                  ]}
+                  onPress={() => setItemData({ ...itemData, color: c })}
+                />
+              ))}
+            </View>
+          </View>
+
+          {/* Botón Guardar */}
+          <Pressable
+            style={[styles.saveButton, isSaving && { opacity: 0.7 }]}
+            onPress={handleSave}
+            disabled={isSaving}
+          >
+            {isSaving ? (
+              <ActivityIndicator color="#F2EEFC" />
+            ) : (
+              <Text style={styles.saveButtonText}>Guardar Cambios</Text>
+            )}
+          </Pressable>
+        </ScrollView>
+      )}
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1 },
-    safeArea: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, marginBottom: 32, gap: 16 },
-    backButton: { padding: 8, marginLeft: -8 },
-    title: { fontSize: 28, fontWeight: '800' },
-    formContainer: { paddingHorizontal: 24 },
-    label: { marginBottom: 8, fontSize: 15, fontWeight: '600', opacity: 0.8 },
-    textInput: { 
-        borderWidth: 1, 
-        borderRadius: 16, 
-        padding: 18, 
-        marginBottom: 24, 
-        width: '100%', 
-        fontSize: 16,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.02,
-        shadowRadius: 4,
-    },
-    switchContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32, paddingVertical: 8 },
-    switchLabel: { fontSize: 16, fontWeight: '600' },
-    saveButton: { 
-        flexDirection: 'row',
-        backgroundColor: '#3B82F6', 
-        paddingVertical: 18, 
-        borderRadius: 16, 
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 10, 
-        gap: 8,
-        shadowColor: "#3B82F6", 
-        shadowOffset: { width: 0, height: 4 }, 
-        shadowOpacity: 0.3, 
-        shadowRadius: 8, 
-        elevation: 4 
-    },
-    saveButtonText: { color: '#ffffff', fontWeight: 'bold', fontSize: 18 },
-    colorPickerContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24, paddingVertical: 8 },
-    colorCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-    colorCircleSelected: { borderWidth: 3, borderColor: '#fff', shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 4 }
+  safeArea: {
+    flex: 1,
+    backgroundColor: ThemeTokens.background,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: ThemeTokens.textPrimary,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: Radii.icon,
+    backgroundColor: ThemeTokens.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: Radii.icon,
+    backgroundColor: ThemeTokens.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: ThemeTokens.borderSubtle,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  fieldSection: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: ThemeTokens.textSecondary,
+    marginBottom: 8,
+  },
+  textInput: {
+    backgroundColor: ThemeTokens.surface,
+    borderWidth: 1,
+    borderColor: ThemeTokens.borderSubtle,
+    borderRadius: Radii.input,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    color: ThemeTokens.textPrimary,
+    fontSize: 15,
+  },
+  colorsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 4,
+  },
+  colorCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  colorCircleSelected: {
+    borderWidth: 3,
+    borderColor: ThemeTokens.brandFill,
+  },
+  saveButton: {
+    backgroundColor: ThemeTokens.brandFill,
+    paddingVertical: 16,
+    borderRadius: Radii.button,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  saveButtonText: {
+    color: '#F2EEFC',
+    fontSize: 16,
+    fontWeight: '700',
+  },
 });

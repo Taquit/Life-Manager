@@ -60,9 +60,9 @@ const headlessNotificationListener = async ({ notification }) => {
       await AsyncStorage.setItem('@debug_notifications', JSON.stringify(existing));
 
       // Procesar y registrar transaccion automatica en el backend (dispara notificacion local si es exitosa)
-      const createdTx = await notiProcesor(notificationData);
-      if (createdTx) {
-        console.log('Transaccion automatica Google Pay registrada con exito:', createdTx);
+      const success = await notiProcesor(notificationData);
+      if (success) {
+        console.log('Transaccion automatica Google Pay procesada con exito');
       }
     } catch (error) {
       console.error('Error processing notification:', error);

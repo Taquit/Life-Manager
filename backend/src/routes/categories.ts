@@ -15,6 +15,7 @@ function mapCategoryRow(row: any): CategoryDTO {
     type: row.type || "gasto",
     color: row.color || "#B84FFF",
     icon: row.icon || "tag",
+    budget: row.budget !== null && row.budget !== undefined ? Number(row.budget) : null,
     count: row.tx_count !== undefined ? Number(row.tx_count) : 0,
   };
 }
@@ -56,7 +57,7 @@ categoryRoutes.get("/", async (c) => {
 categoryRoutes.post("/", async (c) => {
   const userId = c.get("userId");
   const body: CreateCategoryDTO = await c.req.json().catch(() => ({} as any));
-  const { name, color, icon, type } = body;
+  const { name, color, icon, type, budget } = body;
 
   if (!name || !color) {
     return c.json({ error: "Faltan datos obligatorios: name y color" }, 400);
@@ -65,11 +66,18 @@ categoryRoutes.post("/", async (c) => {
   try {
     const { categoryTable } = await getTables();
     const insertQuery = `
-      INSERT INTO ${categoryTable} (user_id, name, type, color, icon)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO ${categoryTable} (user_id, name, type, color, icon, budget)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *;
     `;
-    const values = [userId, name, type || "gasto", color, icon || "tag"];
+    const values = [
+      userId,
+      name,
+      type || "gasto",
+      color,
+      icon || "tag",
+      budget !== undefined && budget !== null ? Number(budget) : null,
+    ];
     const result = await query(insertQuery, values);
     const saved = result.rows[0];
 
@@ -104,8 +112,9 @@ const updateCategoryHandler = async (c: any) => {
         name = COALESCE($1, name),
         color = COALESCE($2, color),
         icon = COALESCE($3, icon),
-        type = COALESCE($4, type)
-      WHERE id = $5 AND user_id = $6
+        type = COALESCE($4, type),
+        budget = CASE WHEN $5::boolean THEN $6 ELSE budget END
+      WHERE id = $7 AND user_id = $8
       RETURNING *;
     `;
     const values = [
@@ -113,6 +122,8 @@ const updateCategoryHandler = async (c: any) => {
       body.color ?? null,
       body.icon ?? null,
       body.type ?? null,
+      body.budget !== undefined,
+      body.budget !== undefined && body.budget !== null ? Number(body.budget) : null,
       id,
       userId,
     ];

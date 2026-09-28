@@ -1,7 +1,8 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { transactionsApi } from './api';
-import { Transaction } from '../types';
+import { GooglePayTransactionDTO } from '../types';
+import { isDuplicateNotification } from './notiDeduplicator';
+import { enqueueTransaction, flushOfflineQueue } from './offlineQueue';
 
 export interface NotificationData {
   title?: string;
@@ -108,32 +109,43 @@ export const triggerLocalNotification = async (
 
 export const notiProcesor = async (
   notificationData: NotificationData
-): Promise<Transaction | null> => {
+): Promise<boolean> => {
   try {
     if (!isGooglePayNotification(notificationData)) {
-      return null;
+      return false;
     }
 
     const parsed = parseNotification(notificationData);
     if (parsed.status !== 'ready' || !parsed.amount || !parsed.cardLast4) {
-      return null;
+      return false;
     }
 
-    const createdTx = await transactionsApi.createGooglePay({
+    // 1. Validar deduplicacion en ventana de 2 minutos
+    const isDuplicate = await isDuplicateNotification(parsed.amount, parsed.cardLast4);
+    if (isDuplicate) {
+      console.log('Notificacion duplicada de Google Pay ignorada en cliente');
+      return false;
+    }
+
+    // 2. Feedback inmediato al usuario mediante notificacion local
+    await triggerLocalNotification(parsed.amount, parsed.cardLast4, parsed.merchant);
+
+    // 3. Encolar en almacenamiento offline
+    const txPayload: GooglePayTransactionDTO = {
       amount: parsed.amount,
       cardLast4: parsed.cardLast4,
       merchant: parsed.merchant,
       note: parsed.note,
       date: new Date().toISOString(),
-    });
+    };
+    await enqueueTransaction(txPayload);
 
-    if (createdTx) {
-      await triggerLocalNotification(parsed.amount, parsed.cardLast4, parsed.merchant);
-    }
+    // 4. Intentar envio inmediato al backend
+    await flushOfflineQueue();
 
-    return createdTx;
+    return true;
   } catch (error) {
     console.error('Error procesando notificacion de Google Pay:', error);
-    return null;
+    return false;
   }
 };

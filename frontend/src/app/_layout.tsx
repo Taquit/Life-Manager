@@ -1,10 +1,11 @@
 import { DarkTheme, DefaultTheme, Slot, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
+import { useColorScheme, AppState } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { flushOfflineQueue } from '@/services/offlineQueue';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -28,6 +29,22 @@ function RootLayoutNav() {
       router.replace('/');
     }
   }, [token, segments, isLoading]);
+
+  // Vaciado de cola offline al regresar a primer plano
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: any) => {
+      if (nextAppState === 'active') {
+        flushOfflineQueue().catch((err) => {
+          console.error('Error sincronizando cola offline:', err);
+        });
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   return (
     <>

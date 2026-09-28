@@ -47,7 +47,8 @@ transactionRoutes.get("/summary", async (c) => {
         t.*,
         c.name AS category_name,
         c.color AS category_color,
-        c.icon AS category_icon
+        c.icon AS category_icon,
+        c.budget AS category_budget
       FROM ${transactionTable} t
       LEFT JOIN ${categoryTable} c ON t.category_id = c.id
       WHERE t.user_id = $1
@@ -61,7 +62,7 @@ transactionRoutes.get("/summary", async (c) => {
     let totalExpense = 0;
     const categoryTotals: Record<
       string,
-      { id: string; name: string; color: string; icon: string; amount: number }
+      { id: string; name: string; color: string; icon: string; budget: number | null; amount: number }
     > = {};
 
     for (const r of rows) {
@@ -76,6 +77,10 @@ transactionRoutes.get("/summary", async (c) => {
         const catName = r.category_name || "Sin categoria";
         const catColor = r.category_color || "#8A7FBD";
         const catIcon = r.category_icon || "help-circle";
+        const catBudget =
+          r.category_budget !== null && r.category_budget !== undefined
+            ? Number(r.category_budget)
+            : null;
 
         if (!categoryTotals[catId]) {
           categoryTotals[catId] = {
@@ -83,6 +88,7 @@ transactionRoutes.get("/summary", async (c) => {
             name: catName,
             color: catColor,
             icon: catIcon,
+            budget: catBudget,
             amount: 0,
           };
         }
@@ -95,6 +101,7 @@ transactionRoutes.get("/summary", async (c) => {
       categoryName: item.name,
       categoryColor: item.color,
       categoryIcon: item.icon,
+      budget: item.budget,
       totalAmount: Number(item.amount.toFixed(2)),
       percentage: totalExpense > 0 ? Number(((item.amount / totalExpense) * 100).toFixed(2)) : 0,
     }));
@@ -346,6 +353,52 @@ transactionRoutes.post("/google-pay", async (c) => {
     const note = body.note || body.merchant || "Pago con Google Pay";
     const origin = "automático_google_pay";
     const type = "gasto";
+
+    // Deduplicacion: +/- 2 minutos respecto a txDate
+    const windowMinutes = 2;
+    const windowStart = new Date(txDate.getTime() - windowMinutes * 60 * 1000);
+    const windowEnd = new Date(txDate.getTime() + windowMinutes * 60 * 1000);
+
+    const dedupQuery = `
+      SELECT
+        t.*,
+        c.name AS category_name,
+        c.color AS category_color,
+        c.icon AS category_icon,
+        cd.banco AS card_banco,
+        cd.bankname AS card_bankname,
+        cd.last_4 AS card_last_4,
+        cd.last4 AS card_last4
+      FROM ${transactionTable} t
+      LEFT JOIN ${categoryTable} c ON t.category_id = c.id
+      LEFT JOIN ${cardTable} cd ON t.card_id = cd.id
+      WHERE t.user_id = $1
+        AND t.card_id = $2
+        AND t.amount = $3
+        AND t.origin = $4
+        AND t.date >= $5
+        AND t.date <= $6
+      ORDER BY t.date DESC
+      LIMIT 1;
+    `;
+    const dedupRes = await query(dedupQuery, [
+      userId,
+      cardRow.id,
+      amount,
+      origin,
+      windowStart,
+      windowEnd,
+    ]);
+
+    if (dedupRes.rows.length > 0) {
+      return c.json(
+        {
+          message: "Transaccion ya registrada previamente (deduplicada)",
+          data: mapTransactionRow(dedupRes.rows[0]),
+        },
+        200
+      );
+    }
 
     const insertTxSql = `
       INSERT INTO ${transactionTable} (user_id, category_id, card_id, type, amount, date, note, title, origin, is_auto)

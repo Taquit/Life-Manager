@@ -39,6 +39,7 @@ export interface CategoryRecord {
   type: string;
   color: string;
   icon: string;
+  budget?: number | string | null;
 }
 
 export interface CategoryDTO {
@@ -48,6 +49,7 @@ export interface CategoryDTO {
   type: string;
   color: string;
   icon: string;
+  budget?: number | null;
   count?: number;
 }
 
@@ -56,6 +58,7 @@ export interface CreateCategoryDTO {
   type?: string;
   color: string;
   icon?: string;
+  budget?: number | null;
 }
 
 export interface UpdateCategoryDTO {
@@ -63,6 +66,7 @@ export interface UpdateCategoryDTO {
   type?: string;
   color?: string;
   icon?: string;
+  budget?: number | null;
 }
 
 // --- Card Types ---
@@ -250,6 +254,7 @@ export interface CategoryBreakdownDTO {
   categoryName: string;
   categoryColor: string;
   categoryIcon: string;
+  budget?: number | null;
   totalAmount: number;
   percentage: number;
 }

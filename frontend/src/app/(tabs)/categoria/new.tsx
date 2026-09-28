@@ -31,6 +31,7 @@ export default function NewCategoryScreen() {
   const router = useRouter();
 
   const [name, setName] = useState('');
+  const [budget, setBudget] = useState('');
   const [type, setType] = useState<'gasto' | 'ingreso'>('gasto');
   const [color, setColor] = useState(CATEGORY_COLORS[0]);
   const [saving, setSaving] = useState(false);
@@ -41,6 +42,12 @@ export default function NewCategoryScreen() {
       return;
     }
 
+    const parsedBudget = budget.trim() ? parseFloat(budget) : null;
+    if (parsedBudget !== null && (isNaN(parsedBudget) || parsedBudget < 0)) {
+      Alert.alert('Error', 'Por favor ingresa un monto de presupuesto válido.');
+      return;
+    }
+
     setSaving(true);
     try {
       await categoriesApi.create({
@@ -48,6 +55,7 @@ export default function NewCategoryScreen() {
         type,
         color,
         icon: 'tag',
+        budget: parsedBudget,
       });
 
       router.back();
@@ -121,6 +129,21 @@ export default function NewCategoryScreen() {
             onChangeText={setName}
           />
         </View>
+
+        {/* Presupuesto Mensual */}
+        {type === 'gasto' && (
+          <View style={styles.fieldSection}>
+            <Text style={styles.label}>Presupuesto mensual (opcional)</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Ej: 3500.00"
+              placeholderTextColor={ThemeTokens.placeholder}
+              keyboardType="numeric"
+              value={budget}
+              onChangeText={setBudget}
+            />
+          </View>
+        )}
 
         {/* Color Palette */}
         <View style={styles.fieldSection}>

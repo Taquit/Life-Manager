@@ -150,7 +150,8 @@ export async function ensureSchemaConstraints(tables: Record<string, string>): P
           ddlStatements.push(
             `ALTER TABLE ${tables.Category} ADD COLUMN IF NOT EXISTS type text DEFAULT 'gasto';`,
             `ALTER TABLE ${tables.Category} ADD COLUMN IF NOT EXISTS color text DEFAULT '#B84FFF';`,
-            `ALTER TABLE ${tables.Category} ADD COLUMN IF NOT EXISTS icon text DEFAULT 'tag';`
+            `ALTER TABLE ${tables.Category} ADD COLUMN IF NOT EXISTS icon text DEFAULT 'tag';`,
+            `ALTER TABLE ${tables.Category} ADD COLUMN IF NOT EXISTS budget numeric;`
           );
         }
 

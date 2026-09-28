@@ -125,9 +125,12 @@ export default function InicioScreen() {
                 tintColor={ThemeTokens.brandText}
               />
             </Pressable>
-            <View style={styles.avatar}>
+            <Pressable
+              style={styles.avatar}
+              onPress={() => router.push('/profile' as any)}
+            >
               <Text style={styles.avatarText}>{userInitial}</Text>
-            </View>
+            </Pressable>
           </View>
         </View>
 

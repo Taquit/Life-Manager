@@ -53,6 +53,32 @@ cardRoutes.get("/by_l4", async (c) => {
   }
 });
 
+// GET /card/:id
+cardRoutes.get("/:id", async (c) => {
+  const userId = c.get("userId");
+  const id = c.req.param("id");
+
+  try {
+    const { cardTable } = await getTables();
+    const result = await query(
+      `SELECT * FROM ${cardTable} WHERE id = $1 AND user_id = $2;`,
+      [id, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return c.json({ error: "Tarjeta no encontrada" }, 404);
+    }
+
+    const card = mapCardRow(result.rows[0]);
+    return c.json({
+      message: "Tarjeta obtenida correctamente",
+      data: card,
+    });
+  } catch (err: any) {
+    return c.json({ error: "Error obteniendo tarjeta", details: err.detail || err.message }, 500);
+  }
+});
+
 // GET /card
 cardRoutes.get("/", async (c) => {
   const userId = c.get("userId");

@@ -150,6 +150,11 @@ export const cardsApi = {
     return res.data.data || [];
   },
 
+  getById: async (id: string): Promise<Card> => {
+    const res = await api.get(`/card/${id}`);
+    return res.data.data;
+  },
+
   getByLast4: async (last4: string): Promise<Card> => {
     const res = await api.get('/card/by_l4', { params: { last4 } });
     return res.data.data;
@@ -185,6 +190,7 @@ export const categoriesApi = {
     color: string;
     icon?: string;
     type?: string;
+    budget?: number | null;
   }): Promise<Category> => {
     const res = await api.post('/category', data);
     return res.data.data;
@@ -197,6 +203,7 @@ export const categoriesApi = {
       color?: string;
       icon?: string;
       type?: string;
+      budget?: number | null;
     }
   ): Promise<Category> => {
     const res = await api.put(`/category/${id}`, data);
