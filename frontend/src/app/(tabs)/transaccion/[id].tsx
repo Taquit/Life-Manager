@@ -18,6 +18,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { ThemeTokens, Radii } from '@/constants/theme';
 import { transactionsApi, categoriesApi, cardsApi, getApiErrorMessage } from '@/services/api';
 import { Transaction, Category, Card } from '@/types';
+import { CategoryIcon } from '@/components/CategoryIcon';
 
 export default function EditTransaccionPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -211,7 +212,15 @@ export default function EditTransaccionPage() {
                     ]}
                     onPress={() => setItemData({ ...itemData, categoryId: cat.id })}
                   >
-                    <Text style={[styles.chipText, isSelected && { color: '#FFFFFF', fontWeight: '700' }]}>
+                    <CategoryIcon
+                      name={cat.name}
+                      color={isSelected ? '#0D0B1A' : cat.color}
+                      size={20}
+                      iconSize={12}
+                      borderRadius={5}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={[styles.chipText, isSelected && { color: '#0D0B1A', fontWeight: '700' }]}>
                       {cat.name}
                     </Text>
                   </Pressable>
@@ -387,15 +396,18 @@ const styles = StyleSheet.create({
   },
   horizontalChips: {
     flexDirection: 'row',
+    paddingVertical: 2,
   },
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: Radii.full,
     backgroundColor: ThemeTokens.surface,
     borderWidth: 1,
     borderColor: ThemeTokens.borderSubtle,
-    marginRight: 10,
+    marginRight: 8,
   },
   chipActive: {
     backgroundColor: ThemeTokens.brandFill,

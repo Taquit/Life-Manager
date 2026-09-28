@@ -180,42 +180,71 @@ export default function NuevaTransaccionScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoriesRow}
           >
+            <Pressable
+              style={[
+                styles.categoryChip,
+                selectedCategoryId === null && styles.categoryChipSelectedDefault,
+              ]}
+              onPress={() => setSelectedCategoryId(null)}
+            >
+              <Text
+                style={[
+                  styles.categoryChipText,
+                  selectedCategoryId === null && styles.categoryChipTextActiveDefault,
+                ]}
+              >
+                Sin categoría
+              </Text>
+            </Pressable>
+
             {displayedCategories.map((cat) => {
               const isSelected = selectedCategoryId === cat.id;
               return (
                 <Pressable
                   key={cat.id}
-                  style={styles.categoryItem}
-                  onPress={() => setSelectedCategoryId(cat.id)}
+                  style={[
+                    styles.categoryChip,
+                    isSelected && {
+                      backgroundColor: cat.color || '#7C3AED',
+                      borderColor: cat.color || '#7C3AED',
+                    },
+                  ]}
+                  onPress={() =>
+                    setSelectedCategoryId(selectedCategoryId === cat.id ? null : cat.id)
+                  }
                 >
                   <CategoryIcon
                     name={cat.name}
-                    color={cat.color}
-                    size={50}
-                    iconSize={24}
-                    borderRadius={14}
-                    style={isSelected && styles.categorySquircleSelected}
+                    color={isSelected ? '#0D0B1A' : cat.color}
+                    size={20}
+                    iconSize={12}
+                    borderRadius={5}
+                    style={{ marginRight: 6 }}
                   />
-                  <Text style={styles.categoryLabel} numberOfLines={1}>
+                  <Text
+                    style={[
+                      styles.categoryChipText,
+                      isSelected && styles.categoryChipTextActive,
+                    ]}
+                  >
                     {cat.name}
                   </Text>
                 </Pressable>
               );
             })}
 
-            {/* Nueva Category Squircle */}
+            {/* Nueva Category Chip */}
             <Pressable
-              style={styles.categoryItem}
+              style={styles.newCategoryChip}
               onPress={() => router.push('/(tabs)/categoria/new' as any)}
             >
-              <View style={styles.newCategorySquircle}>
-                <SymbolView
-                  name={{ ios: 'plus', android: 'add', web: 'add' }}
-                  size={20}
-                  tintColor="#8A7FBD"
-                />
-              </View>
-              <Text style={styles.categoryLabel}>Nueva</Text>
+              <SymbolView
+                name={{ ios: 'plus', android: 'add', web: 'add' }}
+                size={14}
+                tintColor="#8A7FBD"
+                style={{ marginRight: 4 }}
+              />
+              <Text style={styles.newCategoryChipText}>Nueva</Text>
             </Pressable>
           </ScrollView>
         </View>
@@ -419,33 +448,53 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   categoriesRow: {
-    gap: 16,
-    paddingBottom: 4,
-  },
-  categoryItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    width: 64,
+    gap: 8,
+    paddingVertical: 2,
   },
-  categorySquircleSelected: {
-    borderWidth: 2.5,
-    borderColor: '#FFFFFF',
-  },
-  newCategorySquircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: '#4A4178',
-    borderStyle: 'dashed',
-    backgroundColor: 'transparent',
+  categoryChip: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#17142B',
+    borderWidth: 1,
+    borderColor: '#2E2757',
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
   },
-  categoryLabel: {
-    fontSize: 12,
+  categoryChipSelectedDefault: {
+    backgroundColor: '#7C3AED',
+    borderColor: '#7C3AED',
+  },
+  categoryChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8A7FBD',
+  },
+  categoryChipTextActive: {
+    color: '#0D0B1A',
+    fontWeight: '700',
+  },
+  categoryChipTextActiveDefault: {
     color: '#F2EEFC',
-    textAlign: 'center',
-    marginTop: 6,
+    fontWeight: '700',
+  },
+  newCategoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#4A4178',
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+  },
+  newCategoryChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8A7FBD',
   },
   dropdownSelector: {
     flexDirection: 'row',

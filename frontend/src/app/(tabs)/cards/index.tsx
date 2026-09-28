@@ -9,12 +9,13 @@ import {
   Switch,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { ThemeTokens } from '@/constants/theme';
-import { cardsApi } from '@/services/api';
+import { cardsApi, getApiErrorMessage } from '@/services/api';
 import { Card } from '@/types';
 
 export type { Card };
@@ -62,6 +63,29 @@ export default function CardsScreen() {
         prev.map((c) => (c.id === card.id ? { ...c, linkedGoogle: card.linkedGoogle } : c))
       );
     }
+  };
+
+  const handleDeleteCard = (card: Card) => {
+    Alert.alert(
+      'Eliminar Tarjeta',
+      `¿Deseas eliminar la tarjeta ${card.banco} (•••• ${card.last4})?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await cardsApi.delete(card.id);
+              setCards((prev) => prev.filter((c) => c.id !== card.id));
+            } catch (err) {
+              console.error('Error eliminando tarjeta:', err);
+              Alert.alert('Error', getApiErrorMessage(err));
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -125,21 +149,59 @@ export default function CardsScreen() {
             const dividerBg = isNu ? '#632065' : isSantander ? '#2C3154' : '#3E2777';
 
             return (
-              <View key={card.id} style={[styles.cardContainer, { backgroundColor: cardBg }]}>
-                {/* Top Row: Bank name & metallic chip */}
+              <Pressable
+                key={card.id}
+                style={({ pressed }) => [
+                  styles.cardContainer,
+                  { backgroundColor: cardBg },
+                  pressed && { opacity: 0.95 },
+                ]}
+                onPress={() => router.push(`/(tabs)/cards/${card.id}` as any)}
+              >
+                {/* Top Row: Bank name, actions & metallic chip */}
                 <View style={styles.cardTopRow}>
-                  <View>
+                  <View style={{ flex: 1, marginRight: 10 }}>
                     <Text style={styles.bankName}>{card.banco}</Text>
                     <Text style={styles.cardTypeLabel}>
                       {isCredit ? 'Crédito' : 'Débito'}
                     </Text>
                   </View>
-                  <View
-                    style={[
-                      styles.metallicChip,
-                      { backgroundColor: chipBg, borderColor: chipBorder },
-                    ]}
-                  />
+                  <View style={styles.cardActionsGroup}>
+                    <Pressable
+                      style={styles.cardActionBtn}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        router.push(`/(tabs)/cards/${card.id}` as any);
+                      }}
+                      hitSlop={8}
+                    >
+                      <SymbolView
+                        name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
+                        size={15}
+                        tintColor="#F2EEFC"
+                      />
+                    </Pressable>
+                    <Pressable
+                      style={[styles.cardActionBtn, styles.cardDeleteBtn]}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleDeleteCard(card);
+                      }}
+                      hitSlop={8}
+                    >
+                      <SymbolView
+                        name={{ ios: 'trash', android: 'delete', web: 'delete' }}
+                        size={15}
+                        tintColor="#FF5C7A"
+                      />
+                    </Pressable>
+                    <View
+                      style={[
+                        styles.metallicChip,
+                        { backgroundColor: chipBg, borderColor: chipBorder },
+                      ]}
+                    />
+                  </View>
                 </View>
 
                 {/* Card Number & Main Account / Limit */}
@@ -168,7 +230,11 @@ export default function CardsScreen() {
                 <View style={[styles.cardDivider, { backgroundColor: dividerBg }]} />
 
                 {/* Bottom Row: Google Pay toggle */}
-                <View style={styles.googlePayRow}>
+                <View
+                  style={styles.googlePayRow}
+                  onStartShouldSetResponder={() => true}
+                  onTouchEnd={(e) => e.stopPropagation()}
+                >
                   <View style={styles.googlePayInfo}>
                     <SymbolView
                       name={{ ios: 'wave.3.forward', android: 'contactless', web: 'contactless' }}
@@ -188,7 +254,7 @@ export default function CardsScreen() {
                     thumbColor="#F2EEFC"
                   />
                 </View>
-              </View>
+              </Pressable>
             );
           })
         )}
@@ -257,6 +323,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#B4A9E0',
     marginTop: 2,
+  },
+  cardActionsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cardActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  cardDeleteBtn: {
+    backgroundColor: 'rgba(255, 92, 122, 0.18)',
+    borderColor: 'rgba(255, 92, 122, 0.35)',
   },
   metallicChip: {
     width: 36,

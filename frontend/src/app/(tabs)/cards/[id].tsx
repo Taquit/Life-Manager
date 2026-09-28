@@ -291,6 +291,20 @@ export default function EditCardPage() {
               <Text style={styles.saveButtonText}>Guardar Cambios</Text>
             )}
           </Pressable>
+
+          {/* Botón Eliminar */}
+          <Pressable
+            style={[styles.deleteBottomButton, isDeleting && { opacity: 0.7 }]}
+            onPress={handleDelete}
+            disabled={isDeleting}
+          >
+            <SymbolView
+              name={{ ios: 'trash', android: 'delete', web: 'delete' }}
+              size={18}
+              tintColor={ThemeTokens.expenseText}
+            />
+            <Text style={styles.deleteBottomButtonText}>Eliminar Tarjeta</Text>
+          </Pressable>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -431,6 +445,23 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: '#F2EEFC',
     fontSize: 16,
+    fontWeight: '700',
+  },
+  deleteBottomButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: ThemeTokens.expenseText,
+    paddingVertical: 14,
+    borderRadius: Radii.button,
+    marginTop: 14,
+  },
+  deleteBottomButtonText: {
+    color: ThemeTokens.expenseText,
+    fontSize: 15,
     fontWeight: '700',
   },
 });
