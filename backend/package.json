@@ -20,6 +20,7 @@
   "dependencies": {
     "aws-sdk": "^2.1693.0",
     "bcryptjs": "^3.0.3",
+    "hono": "^4.13.8",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.23.0",
     "sst": "^4.17.1"
